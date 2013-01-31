@@ -35,6 +35,7 @@ define([
 	'aloha/console',
 	'aloha/block-jump',
 	'aloha/ephemera',
+	'aloha/command',
 	'util/dom2'
 ], function (
 	Aloha,
@@ -47,6 +48,7 @@ define([
 	console,
 	BlockJump,
 	Ephemera,
+	Command,
 	Dom
 ) {
 	'use strict';
@@ -83,6 +85,41 @@ define([
 	};
 
 	var contentSerializer = defaultContentSerializer;
+
+	// https://dvcs.w3.org/hg/editing/raw-file/tip/editing.html#state-override
+	// "Whenever the number of ranges in the selection changes to
+	// something different, and whenever a boundary point of the range
+	// at a given index in the selection changes to something different,
+	// the state override and value override must be unset for every
+	// command."
+	Aloha.bind('aloha-selection-changed', function (event, range) {
+		if (Command.resetOverrides(range)) {
+			// Because the UI may reflect the any potentially state
+			// overrides that are now no longer in effect, we must
+			// redraw the UI according to the current selection.
+			PubSub.pub('aloha.selection.context-change', {
+				range: range,
+				event: event
+			});
+		}
+	});
+
+	function keyInputElementKeyPressHandler(event) {
+		if (event.altKey || event.ctrlKey || !event.which) {
+			return;
+		}
+		var selection = Aloha.getSelection();
+		if (!selection.getRangeCount()) {
+			return;
+		}
+		var text = String.fromCharCode(event.which);
+		var range = selection.getRangeAt(0);
+		Command.execCommand('insertText', null, text, range);
+		// Because we handled the character insert ourselves via
+		// insertText we must not let the browser's default action
+		// insert the character a second time.
+		event.preventDefault();
+	}
 
 	/**
 	 * Editable object
@@ -233,21 +270,18 @@ define([
 					return me.activate(e);
 				});
 
-				// by catching the keydown we can prevent the browser from doing its own thing
-				// if it does not handle the keyStroke it returns true and therefore all other
-				// events (incl. browser's) continue
-				//me.obj.keydown( function( event ) {
-				//me.obj.add('.aloha-block', me.obj).live('keydown', function (event) { // live not working but would be usefull
-				me.obj.add('.aloha-block', me.obj).keydown(function (event) {
-					var letEventPass = Markup.preProcessKeyStrokes(event);
-					me.keyCode = event.which;
+				var keyInputElements = me.obj.add('.aloha-block', me.obj)
+					.keydown(function (event) {
+						var letEventPass = Markup.preProcessKeyStrokes(event);
+						me.keyCode = event.which;
 
-					if (!letEventPass) {
-						// the event will not proceed to key press, therefore trigger smartContentChange
-						me.smartContentChange(event);
-					}
-					return letEventPass;
-				});
+						if (!letEventPass) {
+							// the event will not proceed to key press, therefore trigger smartContentChange
+							me.smartContentChange(event);
+						}
+						return letEventPass;
+					})
+					.keypress(keyInputElementKeyPressHandler);
 
 				// handle keypress
 				me.obj.keypress(function (event) {

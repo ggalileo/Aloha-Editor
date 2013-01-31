@@ -27,8 +27,10 @@
 define('format/format-plugin', [
 	'aloha',
 	'aloha/plugin',
+	'aloha/command',
 	'jquery',
 	'util/arrays',
+	'util/maps',
 	'ui/ui',
 	'ui/toggleButton',
 	'ui/port-helper-multi-split',
@@ -39,8 +41,10 @@ define('format/format-plugin', [
 ], function (
 	Aloha,
 	Plugin,
+	Command,
 	jQuery,
 	Arrays,
+	Maps,
 	Ui,
 	ToggleButton,
 	MultiSplitButton,
@@ -195,6 +199,13 @@ define('format/format-plugin', [
 		Aloha.Selection.changeMarkupOnSelection(jQuery('<' + button + '>'));
 	}
 
+	function canonicalRangeFromAlohaRange(alohaRange) {
+		var range = Aloha.createRange();
+		range.setStart(alohaRange.startContainer, alohaRange.startOffset);
+		range.setEnd(alohaRange.endContainer, alohaRange.endOffset);
+		return range;
+	}
+
 	function addMarkup(button) {
 		var formatPlugin = this;
 		var markup = jQuery('<'+button+'>');
@@ -223,6 +234,19 @@ define('format/format-plugin', [
 			// when the range is collapsed, extend it to a word
 			if (rangeObject.isCollapsed()) {
 				GENTICS.Utils.Dom.extendToWord(rangeObject);
+				if (rangeObject.isCollapsed()) {
+					var range = canonicalRangeFromAlohaRange(rangeObject);
+					Command.setStateOverride(commandsByElement[button], true, range);
+					// Because without doing rangeObject.select(), the
+					// next insertText command (see editable.js) will
+					// not be reached and instead the browsers default
+					// insert behaviour will be applied (which doesn't
+					// know anything about state overrides). I don't
+					// know the exact reasons why; probably some
+					// stopPropagation somewhere by some plugin.
+					rangeObject.select();
+					return;
+				}
 			}
 
 			// add the markup
