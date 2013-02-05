@@ -1,4 +1,4 @@
-/* ephemera.js is part of Aloha Editor project http://aloha-editor.org
+/* dom2.js is part of Aloha Editor project http://aloha-editor.org
  *
  * Aloha Editor is a WYSIWYG HTML5 inline editing library and editor. 
  * Copyright (c) 2010-2012 Gentics Software GmbH, Vienna, Austria.
@@ -24,7 +24,7 @@
  * provided you include this license notice and a URL through which
  * recipients can access the Corresponding Source.
  */
-define(['jquery', 'util/maps', 'util/strings', 'util/browser'], function ($, Maps, Strings, Browser) {
+define(['jquery', 'util/maps', 'util/trees', 'util/strings', 'util/browser'], function ($, Maps, Trees, Strings, Browser) {
 	'use strict';
 
 	var spacesRx = /\s+/;
@@ -242,12 +242,230 @@ define(['jquery', 'util/maps', 'util/strings', 'util/browser'], function ($, Map
 		return index;
 	}
 
+	function isAtEnd(node, offset) {
+		return 1 === node.nodeType
+			&& offset >= node.childNodes.length;
+	}
+
+	function nodeAtOffset(node, offset) {
+		if (1 === node.nodeType && offset < node.childNodes.length) {
+			node = node.childNodes[offset];
+		}
+		return node;
+	}
+
+	function Cursor(node, atEnd) {
+		this.node = node;
+		this.atEnd = atEnd;
+	}
+
+	/**
+	 * A cursor has the added utility over other iteration methods of
+	 * iterating over the end position of an element. The start and end
+	 * positions of an element are immediately before and after the
+	 * first and last child respectively. All node positions except end
+	 * positions can be identified just by a node. To distinguish
+	 * between element start and end positions, the additional atEnd
+	 * boolean is necessary.
+	 */
+	function cursor(node, atEnd) {
+		return new Cursor(node, atEnd);
+	}
+
+	Cursor.prototype.next = function () {
+		var node = this.node;
+		var atEnd = this.atEnd;
+		var next;
+		if (atEnd) {
+			next = node.nextSibling;
+			atEnd = false;
+			if (!next) {
+				next = node.parentNode;
+				atEnd = true;
+				if (!next) {
+					return false;
+				}
+			}
+		} else {
+			next = node.firstChild;
+			if (!next) {
+				atEnd = true;
+			}
+		}
+		this.node = next;
+		this.atEnd = atEnd;
+		return true;
+	};
+
+	Cursor.prototype.equals = function (cursor) {
+		return cursor.node === this.node && cursor.atEnd === this.atEnd;
+	};
+
+	Cursor.prototype.clone = function (cursor) {
+		return cursor(cursor.node, cursor.atEnd);
+	};
+
+	Cursor.prototype.insert = function (node) {
+		if (this.atEnd) {
+			this.node.appendChild(node);
+		} else {
+			this.node.parentNode.insertBefore(node, this.node);
+		}
+	};
+
+	/**
+	 * @param offset if node is a text node, the offset will be ignored.
+	 */
+	function cursorFromBoundaryPoint(node, offset) {
+		return cursor(nodeAtOffset(node, offset), isAtEnd(node, offset));
+	}
+
+	function parentsUntil(node, pred) {
+		var parents = [];
+		var parent = node.parentNode;
+		while (parent && !pred(parent)) {
+			parents.push(parent);
+			parent = parent.parentNode;
+		}
+		return parents;
+	}
+
+	function parentsUntilIncl(node, pred) {
+		var parents = parentsUntil(node, pred);
+		if (parents && parents.length) {
+			var parent = parents[parents.length - 1].parentNode;
+			if (parent) {
+				parents.push(parent);
+			}
+		}
+		return parents;
+	}
+
+	function childAndParentsUntilWithFn(node, pred, parentsUntilFn) {
+		if (pred(node)) {
+			return [node];
+		}
+		var parents = parentsUntilFn(node, pred);
+		parents.unshift(node);
+		return parents;
+	}
+
+	function childAndParentsUntil(node, pred) {
+		return childAndParentsUntilWithFn(node, pred, parentsUntil);
+	}
+
+	function childAndParentsUntilIncl(node, pred) {
+		return childAndParentsUntilWithFn(node, pred, parentsUntilIncl);
+	}
+
+	function splitTextNode(node, offset) {
+		// Because node.splitText() is buggy on IE, split it manually.
+		// http://www.quirksmode.org/dom/w3c_core.html
+		var parent = node.parentNode;
+		var text = node.nodeValue;
+		if (0 === offset || offset >= text.length) {
+			return node;
+		}
+		var before = document.createTextNode(text.substring(0, offset))
+		var after = document.createTextNode(text.substring(offset, text.length));
+		parent.insertBefore(before, node);
+		parent.insertBefore(after, node);
+		parent.removeChild(node);
+		return before;
+	}
+
+	function adjustRangeAfterSplit(range, containerProp, offsetProp, setProp, splitNode, newNodeBeforeSplit) {
+		var rangeContainer = range[containerProp];
+		if (rangeContainer !== splitNode) {
+			return;
+		}
+		var rangeOffset = range[offsetProp];
+		var newNodeLength = newNodeBeforeSplit.length;
+		if (rangeOffset === 0) {
+			rangeContainer = newNodeBeforeSplit.parentNode;
+			rangeOffset = nodeIndex(newNodeBeforeSplit);
+		} else if (rangeOffset < newNodeLength) {
+			rangeContainer = newNodeBeforeSplit;
+		} else if (rangeOffset === newNodeLength) {
+			rangeContainer = newNodeBeforeSplit.parentNode;
+			rangeOffset = nodeIndex(newNodeBeforeSplit) + 1;
+		} else {// rangeOffset > newNodeLength
+			var newNodeAfterSplit = newNodeBeforeSplit.nextSibling;
+			rangeContainer = newNodeAfterSplit;
+			rangeOffset -= newNodeLength;
+		}
+		range[setProp].call(range, rangeContainer, rangeOffset);
+	}
+
+	function splitNodeAdjustRange(splitNode, splitOffset, range) {
+		if (3 !== splitNode.nodeType) {
+			return;
+		}
+		var newNodeBeforeSplit = splitTextNode(splitNode, splitOffset);
+		adjustRangeAfterSplit(range, 'startContainer', 'startOffset', 'setStart', splitNode, newNodeBeforeSplit);
+		adjustRangeAfterSplit(range, 'endContainer', 'endOffset', 'setEnd', splitNode, newNodeBeforeSplit);
+	}
+
+	/**
+	 * Guarantees that start and end containers of range will be
+	 * adjusted so they are element nodes.
+	 */
+	function splitTextContainers(range) {
+		splitNodeAdjustRange(range.startContainer, range.startOffset, range);
+		splitNodeAdjustRange(range.endContainer, range.endOffset, range);
+	}
+
+	function nodeIndex(node) {
+		var ret = 0;
+		while (node.previousSibling) {
+			ret++;
+			node = node.previousSibling;
+		}
+		return ret;
+	}
+
+	function shallowRemove(node) {
+		var parent = node.parentNode;
+		moveNextAll(parent, node.firstChild, node);
+		parent.removeChild(node);
+	}
+
+	function wrap(node, wrapper) {
+		node.parentNode.insertBefore(wrapper, node);
+		wrapper.appendChild(node);
+	}
+
+	function traverse(root, step) {
+		Trees.prewalkDom(
+			root,
+			function (form) {
+				step(form);
+				return form;
+			},
+			/*inplace*/true
+		);
+	}
+
 	return {
 		moveNextAll: moveNextAll,
 		attrNames: attrNames,
 		attrs: attrs,
 		indexByClass: indexByClass,
 		indexByName: indexByName,
-		indexByClassHaveList: indexByClassHaveList
+		indexByClassHaveList: indexByClassHaveList,
+		cursor: cursor,
+		cursorFromBoundaryPoint: cursorFromBoundaryPoint,
+		nodeAtOffset: nodeAtOffset,
+		isAtEnd: isAtEnd,
+		parentsUntil: parentsUntil,
+		parentsUntilIncl: parentsUntilIncl,
+		childAndParentsUntil: childAndParentsUntil,
+		childAndParentsUntilIncl: childAndParentsUntilIncl,
+		nodeIndex: nodeIndex,
+		splitTextNode: splitTextNode,
+		splitTextContainers: splitTextContainers,
+		shallowRemove: shallowRemove,
+		wrap: wrap,
+		traverse: traverse
 	};
 });

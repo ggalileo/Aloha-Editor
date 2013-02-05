@@ -35,7 +35,18 @@ define([], function () {
 		return arg;
 	}
 
+	function noop() {
+	}
+
+	function complement(fn) {
+		return function () {
+			!fn.apply(this, arguments);
+		};
+	}
+
 	return {
-		identity: identity
+		identity: identity,
+		noop: noop,
+		complement: complement
 	};
 });
