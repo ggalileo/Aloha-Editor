@@ -29,8 +29,8 @@ Aloha.require([
 		var rightMarker = document.createTextNode(rightMarkerChar);
 		var start = Dom.cursorFromBoundaryPoint(range.startContainer, range.startOffset);
 		var end = Dom.cursorFromBoundaryPoint(range.endContainer, range.endOffset);
-		end.insert(rightMarker);
 		start.insert(leftMarker);
+		end.insert(rightMarker);
 	}
 
 	function extractBoundaryMarkers(root, range) {
@@ -80,24 +80,24 @@ Aloha.require([
 			}
 			// Because non-text splits must not be joined again.
 			var forceNextSplit = false;
+			var replacement = null;
 			Arrays.forEach(parts, function (part, i) {
 				// Because we don't want to join text nodes we haven't split.
-				forceNextSplit = (i === 0);
+				forceNextSplit = forceNextSplit || (i === 0);
 				if (Arrays.contains(markers, part)) {
 					forceNextSplit = setBoundaryPoint(part, node);
 				} else if (!forceNextSplit && node.previousSibling && 3 === node.previousSibling.nodeType) {
+					replacement = node.previousSibling;
 					node.previousSibling.insertData(node.previousSibling.length, part);
 				} else {
-					node.parentNode.insertBefore(document.createTextNode(part), node);
+					replacement = document.createTextNode(part);
+					node.parentNode.insertBefore(replacement, node);
 				}
 			});
-			node.parentNode.removeChild(node);
-			return node;
+			return replacement;
 		}
-		range.startContainer = null;
-		range.endContainer = null;
-		Trees.prewalkDom(root, extractMarkers, true);
-		if (!range.startContainer || !range.endContainer) {
+		Dom.traverse(root, extractMarkers);
+		if (2 !== markersFound) {
 			throw "Missing one or both markers";
 		}
 	}
@@ -113,8 +113,6 @@ Aloha.require([
 		}
 		function t(htmlWithBoundaryMarkers) {
 			t2(htmlWithBoundaryMarkers);
-			// Because text markers and node markers can exist in the
-			// same places.
 			t2(htmlWithBoundaryMarkers
 			   .replace(/\{/g, '[')
 			   .replace(/\}/g, ']'));
@@ -152,7 +150,8 @@ Aloha.require([
 		 '<p>{<b>Some text.</b>}</p>',
 		 makeFormatter('B')]
 	];
-	Arrays.forEach(mutations, function (formatTest) {
-		testMutation.apply(null, 'format', formatTest);
+	Arrays.forEach(formatTests, function (formatTest) {
+		formatTest.unshift('format');
+		testMutation.apply(null, formatTest);
 	});
 });

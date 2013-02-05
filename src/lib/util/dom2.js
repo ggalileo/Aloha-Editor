@@ -374,12 +374,10 @@ define(['jquery', 'util/maps', 'util/trees', 'util/strings', 'util/browser'], fu
 		return before;
 	}
 
-	function adjustRangeAfterSplit(range, containerProp, offsetProp, setProp, splitNode, newNodeBeforeSplit) {
-		var rangeContainer = range[containerProp];
+	function adjustRangeAfterSplit(range, rangeContainer, rangeOffset, setProp, splitNode, newNodeBeforeSplit) {
 		if (rangeContainer !== splitNode) {
 			return;
 		}
-		var rangeOffset = range[offsetProp];
 		var newNodeLength = newNodeBeforeSplit.length;
 		if (rangeOffset === 0) {
 			rangeContainer = newNodeBeforeSplit.parentNode;
@@ -402,8 +400,8 @@ define(['jquery', 'util/maps', 'util/trees', 'util/strings', 'util/browser'], fu
 			return;
 		}
 		var newNodeBeforeSplit = splitTextNode(splitNode, splitOffset);
-		adjustRangeAfterSplit(range, 'startContainer', 'startOffset', 'setStart', splitNode, newNodeBeforeSplit);
-		adjustRangeAfterSplit(range, 'endContainer', 'endOffset', 'setEnd', splitNode, newNodeBeforeSplit);
+		adjustRangeAfterSplit(range, range.startContainer, range.startOffset, 'setStart', splitNode, newNodeBeforeSplit);
+		adjustRangeAfterSplit(range, range.endContainer, range.endOffset, 'setEnd', splitNode, newNodeBeforeSplit);
 	}
 
 	/**
@@ -411,8 +409,18 @@ define(['jquery', 'util/maps', 'util/trees', 'util/strings', 'util/browser'], fu
 	 * adjusted so they are element nodes.
 	 */
 	function splitTextContainers(range) {
-		splitNodeAdjustRange(range.startContainer, range.startOffset, range);
-		splitNodeAdjustRange(range.endContainer, range.endOffset, range);
+		var origRange = {
+			startContainer: range.startContainer,
+			startOffset: range.startOffset,
+			endContainer: range.endContainer,
+			endOffset: range.endOffset,
+			setStart: function (x, y) { this.startContainer = x; this.startOffset = y; },
+			setEnd: function (x, y) { this.endContainer = x; this.endOffset = y; }
+		};
+		splitNodeAdjustRange(origRange.startContainer, origRange.startOffset, origRange);
+		splitNodeAdjustRange(origRange.endContainer, origRange.endOffset, origRange);
+		range.setStart(origRange.startContainer, origRange.startOffset);
+		range.setEnd(origRange.endContainer, origRange.endOffset);
 	}
 
 	function nodeIndex(node) {
@@ -435,15 +443,14 @@ define(['jquery', 'util/maps', 'util/trees', 'util/strings', 'util/browser'], fu
 		wrapper.appendChild(node);
 	}
 
-	function traverse(root, step) {
-		Trees.prewalkDom(
-			root,
-			function (form) {
-				step(form);
-				return form;
-			},
-			/*inplace*/true
-		);
+	function traverse(root, fn) {
+		function step(node) {
+			var replacement = fn(node);
+			return replacement
+				? [Trees.walkDomInplace(replacement, step)]
+				: [];
+		}
+		step(root);
 	}
 
 	return {

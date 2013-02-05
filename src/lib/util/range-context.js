@@ -96,7 +96,10 @@ define(['util/dom2', 'util/trees', 'util/functions'], function (Dom, Trees, Fn) 
 			return false;
 		}
 		function clearOverrideRec(node) {
-			Dom.traverse(node, clearOverride);
+			Dom.traverse(node, function (node) {
+				clearOverride(node);
+				return node;
+			});
 		}
 		function belowEqCac(node) {
 			return node.parentNode === range.commonAncestorContainer
