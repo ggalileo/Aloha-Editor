@@ -33,7 +33,10 @@ Aloha.require([
 		end.insert(rightMarker);
 	}
 
-	function extractBoundaryMarkers(root, range) {
+	/**
+	 * @param root must be an element node.
+	 */
+	function extractBoundaryMarkers(rootElem, range) {
 		var markers = ['[', '{', '}', ']'];
 		var markersFound = 0;
 		function setBoundaryPoint(marker, node) {
@@ -96,7 +99,7 @@ Aloha.require([
 			});
 			return replacement;
 		}
-		Dom.traverse(root, extractMarkers);
+		Dom.replaceRec(rootElem, extractMarkers);
 		if (2 !== markersFound) {
 			throw "Missing one or both markers";
 		}

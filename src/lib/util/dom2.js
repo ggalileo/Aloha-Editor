@@ -24,7 +24,21 @@
  * provided you include this license notice and a URL through which
  * recipients can access the Corresponding Source.
  */
-define(['jquery', 'util/maps', 'util/trees', 'util/strings', 'util/browser'], function ($, Maps, Trees, Strings, Browser) {
+define([
+	'jquery',
+	'util/functions',
+	'util/maps',
+	'util/trees',
+	'util/strings',
+	'util/browser'
+], function (
+	$,
+	Fn,
+	Maps,
+	Trees,
+	Strings,
+	Browser
+) {
 	'use strict';
 
 	var spacesRx = /\s+/;
@@ -441,14 +455,40 @@ define(['jquery', 'util/maps', 'util/trees', 'util/strings', 'util/browser'], fu
 		wrapper.appendChild(node);
 	}
 
-	function traverse(root, fn) {
+	function replaceRec(root, fn) {
 		function step(node) {
-			var replacement = fn(node);
-			return replacement
-				? [Trees.walkDomInplace(replacement, step)]
-				: [];
+			node = Trees.walkDomInplace(node, step);
+			node = fn(node);
+			return node ? [node] : [];
 		}
-		step(root);
+		return step(root)[0] || null;
+	}
+
+	function replace(node, newNode) {
+		if (newNode !== node) {
+			if (newNode) {
+				node.parentNode.replaceChild(newNode, node);
+			} else {
+				node.parentNode.removeChild(node);
+			}
+		}
+		return newNode;
+	}
+
+	function replaceNext(node, newNode) {
+		var next = node.nextSibling;
+		replace(node, newNode);
+		return next;
+	}
+
+	function replaceAtAfterUntil(node, fn, until) {
+		while (node && !until(node)) {
+			node = replaceNext(node, fn(node));
+		}
+	}
+
+	function replaceAtAfter(node, fn) {
+		return replaceAtAfter(node, fn, Fn.returnFalse);
 	}
 
 	return {
@@ -471,6 +511,10 @@ define(['jquery', 'util/maps', 'util/trees', 'util/strings', 'util/browser'], fu
 		splitTextContainers: splitTextContainers,
 		shallowRemove: shallowRemove,
 		wrap: wrap,
-		traverse: traverse
+		replace: replace,
+		replaceNext: replaceNext,
+		replaceRec: replaceRec,
+		replaceAtAfterUntil: replaceAtAfterUntil,
+		replaceAtAfter: replaceAtAfter
 	};
 });
