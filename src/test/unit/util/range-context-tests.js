@@ -83,23 +83,20 @@ Aloha.require([
 			}
 			// Because non-text splits must not be joined again.
 			var forceNextSplit = false;
-			var replacement = null;
 			Arrays.forEach(parts, function (part, i) {
 				// Because we don't want to join text nodes we haven't split.
 				forceNextSplit = forceNextSplit || (i === 0);
 				if (Arrays.contains(markers, part)) {
 					forceNextSplit = setBoundaryPoint(part, node);
 				} else if (!forceNextSplit && node.previousSibling && 3 === node.previousSibling.nodeType) {
-					replacement = node.previousSibling;
 					node.previousSibling.insertData(node.previousSibling.length, part);
 				} else {
-					replacement = document.createTextNode(part);
-					node.parentNode.insertBefore(replacement, node);
+					node.parentNode.insertBefore(document.createTextNode(part), node);
 				}
 			});
-			return replacement;
+			return node.nextSibling;
 		}
-		Dom.replaceRec(rootElem, extractMarkers);
+		Dom.walkRec(rootElem, extractMarkers);
 		if (2 !== markersFound) {
 			throw "Missing one or both markers";
 		}

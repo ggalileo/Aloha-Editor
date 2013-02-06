@@ -455,40 +455,23 @@ define([
 		wrapper.appendChild(node);
 	}
 
-	function replaceRec(root, fn) {
-		function step(node) {
-			node = Trees.walkDomInplace(node, step);
-			node = fn(node);
-			return node ? [node] : [];
-		}
-		return step(root)[0] || null;
-	}
-
-	function replace(node, newNode) {
-		if (newNode !== node) {
-			if (newNode) {
-				node.parentNode.replaceChild(newNode, node);
-			} else {
-				node.parentNode.removeChild(node);
-			}
-		}
-		return newNode;
-	}
-
-	function replaceNext(node, newNode) {
-		var next = node.nextSibling;
-		replace(node, newNode);
-		return next;
-	}
-
-	function replaceAtAfterUntil(node, fn, until) {
+	function walkUntil(node, fn, until) {
 		while (node && !until(node)) {
-			node = replaceNext(node, fn(node));
+			node = fn(node);
 		}
 	}
 
-	function replaceAtAfter(node, fn) {
-		return replaceAtAfter(node, fn, Fn.returnFalse);
+	function walk(node, fn) {
+		walkUntil(node, fn, Fn.returnFalse);
+	}
+
+	function walkRec(node, fn) {
+		if (1 === node.nodeType) {
+			walk(node.firstChild, function (node) {
+				return walkRec(node, fn);
+			});
+		}
+		return fn(node);
 	}
 
 	return {
@@ -511,10 +494,8 @@ define([
 		splitTextContainers: splitTextContainers,
 		shallowRemove: shallowRemove,
 		wrap: wrap,
-		replace: replace,
-		replaceNext: replaceNext,
-		replaceRec: replaceRec,
-		replaceAtAfterUntil: replaceAtAfterUntil,
-		replaceAtAfter: replaceAtAfter
+		walk: walk,
+		walkRec: walkRec,
+		walkUntil: walkUntil
 	};
 });
