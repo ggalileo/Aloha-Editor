@@ -128,30 +128,36 @@ Aloha.require([
 		t('<p>1234{<b>Some text.</b>}5678</p>');
 	});
 
-	function testMutation(name, htmlWithBoundaryMarkers, expectedHtmlWithBoundaryMarkers, mutate) {
-		test(name, function () {
-			var dom = $(htmlWithBoundaryMarkers)[0];
-			var range = Aloha.createRange();
-			extractBoundaryMarkers(dom, range);
-			dom = mutate(dom, range) || dom;
-			insertBoundaryMarkers(range);
-			equal(DomToXhtml.nodeToXhtml(dom), expectedHtmlWithBoundaryMarkers);
-		});
-	}
 
-	function makeFormatter(nodeName) {
+	function makeFormatter(nodeName, unformat) {
 		return function (dom, range) {
-			RangeContext.format(range, nodeName, false);
+			RangeContext.format(range, nodeName, unformat);
 		};
 	}
 
-	var formatTests = [
-		['<p>[Some text.]</p>',
-		 '<p>{<b>Some text.</b>}</p>',
-		 makeFormatter('B')]
-	];
-	Arrays.forEach(formatTests, function (formatTest) {
-		formatTest.unshift('format');
-		testMutation.apply(null, formatTest);
+	function testMutation(before, after, mutate) {
+		var dom = $(before)[0];
+		var range = Aloha.createRange();
+		extractBoundaryMarkers(dom, range);
+		dom = mutate(dom, range) || dom;
+		insertBoundaryMarkers(range);
+		equal(DomToXhtml.nodeToXhtml(dom), after);
+	}
+
+	test('RangeContext.format', function () {
+		var t = function (before, after) {
+			testMutation(before, after, makeFormatter('B'));
+		};
+		t('<p>[Some text.]</p>', '<p>{<b>Some text.</b>}</p>');
+		t('<p><b>[Some text.]</b></p>', '<p><b>{Some text.}</b></p>');
+		t('<p><b><i>[Some text.]</i></b></p>', '<p><b><i>{Some text.}</i></b></p>');
+	});
+	test('RangeContext.format unformat', function () {
+		var t = function (before, after) {
+			testMutation(before, after, makeFormatter('B', true));
+		};
+		t('<p>[Some text.]</p>', '<p>{Some text.}</p>');
+		t('<p><b>[Some text.]</b></p>', '<p>{Some text.}</p>');
+		t('<p><b><i>[Some text.]</i></b></p>', '<p><i>{Some text.}</i></p>');
 	});
 });

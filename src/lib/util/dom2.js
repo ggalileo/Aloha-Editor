@@ -332,11 +332,9 @@ define(['jquery', 'util/maps', 'util/trees', 'util/strings', 'util/browser'], fu
 
 	function parentsUntilIncl(node, pred) {
 		var parents = parentsUntil(node, pred);
-		if (parents && parents.length) {
-			var parent = parents[parents.length - 1].parentNode;
-			if (parent) {
-				parents.push(parent);
-			}
+		var topmost = parents.length ? parents[parents.length - 1] : node;
+		if (topmost && topmost.parentNode) {
+			parents.push(topmost.parentNode);
 		}
 		return parents;
 	}
@@ -405,8 +403,8 @@ define(['jquery', 'util/maps', 'util/trees', 'util/strings', 'util/browser'], fu
 	}
 
 	/**
-	 * Guarantees that start and end containers of range will be
-	 * adjusted so they are element nodes.
+	 * Guarantees that after the split, the boundary points will be
+	 * between nodes, as oppsed to between text.
 	 */
 	function splitTextContainers(range) {
 		var origRange = {

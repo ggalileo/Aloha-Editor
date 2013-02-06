@@ -38,6 +38,14 @@ define([], function () {
 	function noop() {
 	}
 
+	function returnTrue() {
+		return true;
+	}
+
+	function returnFalse() {
+		return false;
+	}
+
 	function complement(fn) {
 		return function () {
 			!fn.apply(this, arguments);
@@ -47,6 +55,8 @@ define([], function () {
 	return {
 		identity: identity,
 		noop: noop,
+		returnTrue: returnTrue,
+		returnFalse: returnFalse,
 		complement: complement
 	};
 });
