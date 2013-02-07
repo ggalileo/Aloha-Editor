@@ -37,127 +37,119 @@ define([
 ) {
 	'use strict';
 
-	function walkSiblings(parent, beforeAfterChild, before, after, arg) {
+	function walkSiblings(parent, beforeAfterChild, before, at, after, arg) {
 		var fn = before;
 		Dom.walk(parent.firstChild, function (child) {
 			if (child !== beforeAfterChild) {
-				child = fn(child, arg);
+				return fn(child, arg);
 			} else {
 				fn = after;
+				return at(child, arg);
 			}
-			return child;
 		});
 	}
 
-	function ascendWalkSiblings(ascendNodes, atEnd, carryDown, ascend, before, after, arg) {
+	function ascendWalkSiblings(ascendNodes, atEnd, carryDown, before, at, after, arg) {
 		var i;
 		var args = [];
 		var arg = null;
 		for (i = ascendNodes.length; i--; ) {
-			arg = carryDown(ascendNodes[i], arg) || arg;
+			arg = carryDown(ascendNodes[i]) || arg;
 			args.push(arg);
 		}
+		args.reverse();
 		// Because with end positions like
-		// <elem>xx{</elem> or <elem>xx}</elem>
-		// ascendecending would start at <elem> and not "xx".
+		// <elem>text{</elem> or <elem>text}</elem>
+		// ascendecending would start at <elem> ignoring "text".
 		if (ascendNodes.length && atEnd) {
-			Dom.walk(ascendNodes[0].firstChild, before);
+			Dom.walk(ascendNodes[0].firstChild, function (node) {
+				return before(node, args[0]);
+			});
 		}
-		var node;
-		for (i = 0; i < ascendNodes.length; i++) {
-			node = ascendNodes[i];
-			var parent = node.parentNode;
-			if (parent) {
-				walkSiblings(parent, node, before, after, args[i]);
-			}
-			node = ascend(node);
+		for (i = 0; i < ascendNodes.length - 1; i++) {
+			var child = ascendNodes[i];
+			var parent = ascendNodes[i + 1];
+			walkSiblings(parent, child, before, at, after, args[i + 1]);
 		}
-		return node;
 	}
 
-	function ascendBoundaryPointWalkSiblings(boundaryNode, boundaryOffset, isCac, carryDown, ascend, before, after, arg) {
-		var lowest = Dom.nodeAtOffset(boundaryNode, boundaryOffset);
-		var atEnd = Dom.isAtEnd(boundaryNode, boundaryOffset);
-		var ascendNodes = Dom.childAndParentsUntilIncl(lowest, isCac);
-		return ascendWalkSiblings(ascendNodes, atEnd, carryDown, ascend, before, after, arg);
-	}
-
-	/**
-	 * Requires range's boundary points to be between nodes
-	 * (Dom.splitTextContainers).
-	 */
-	function walkBoundary(range, carryDown, ascend, stepOutside, stepInside) {
-		var cac = range.commonAncestorContainer;
-		function isCac(node) {
+	function ascendBoundaryPointWalkSiblings(node, atEnd, cac, carryDown, before, at, after, arg) {
+		var uptoInclCacChild = Dom.childAndParentsUntil(node, function (node) {
 			return node === cac;
-		}
-		var s  = range.startContainer;
-		var e  = range.endContainer;
-		var so = range.startOffset;
-		var eo = range.endOffset;
-		cac = ascendBoundaryPointWalkSiblings(s, so, isCac, carryDown, ascend, stepOutside, stepInside);
-		if (!cac) {
-			return null;
-		}
-		cac = ascendBoundaryPointWalkSiblings(e, eo, isCac, carryDown, ascend, stepInside , stepOutside);
-		if (!cac) {
-			return null;
-		}
-		var cacChildStart = Dom.childAndParentsUntil(s, isCac).pop();
-		var cacChildEnd   = Dom.childAndParentsUntil(e, isCac).pop();
-		function isCacChildEnd(node) {
-			return node === cacChildEnd;
-		}
-		if (cacChildStart !== cacChildEnd && cacChildStart.parentNode === cacChildEnd.parentNode) {
-			Dom.walkUntil(cacChildStart.nextSibling, stepInside, isCacChildEnd);
-		}
-		return cac;
+		});
+		var arg = carryDown(cac) || arg;
+		ascendWalkSiblings(uptoInclCacChild, atEnd, carryDown, before, at, after, arg);
+		return uptoInclCacChild.length ? uptoInclCacChild[uptoInclCacChild.length - 1] : null;
 	}
 
 	/**
 	 * Requires range's boundary points to be between nodes
 	 * (Dom.splitTextContainers).
 	 */
-	function pushDownContext(range, topmostOverride, getOverride, clearOverride, clearOverrideRec, pushDownOverride) {
-		function isTopmostOverride(node) {
-			return node === topmostOverride;
+	function walkBoundary(range, carryDown, stepOutside, stepPartial, stepInside, arg) {
+		// Because range may be mutated during traversal.
+		var cac = range.commonAncestorContainer;
+		var sc  = range.startContainer;
+		var ec  = range.endContainer;
+		var so  = range.startOffset;
+		var eo  = range.endOffset;
+		var start    = Dom.nodeAtOffset(sc, so);
+		var end      = Dom.nodeAtOffset(ec, eo);
+		var startAtE = Dom.isAtEnd(sc, so);
+		var endAtE   = Dom.isAtEnd(ec, eo);
+		var cacChildStart = ascendBoundaryPointWalkSiblings(start, startAtE, cac, carryDown, stepOutside, stepPartial, stepInside, arg);
+		var cacChildEnd   = ascendBoundaryPointWalkSiblings(end, endAtE, cac, carryDown, stepInside, stepPartial, stepOutside, arg);
+		function isCacChildStart(node) { return node === cacChildStart; }
+		function isCacChildEnd  (node) { return node === cacChildEnd  ; }
+		if (cacChildStart && cacChildStart !== cacChildEnd) {
+			var next;
+			Dom.walkUntil(cac.firstChild, stepOutside, isCacChildStart);
+			next = start === cacChildStart
+			     ? stepInside(cacChildStart)
+				 : stepPartial(cacChildStart);
+			// Because cacChildEnd === null will correctly walk to the
+			// last child of cac, we can just use isCacChildEnd.
+			Dom.walkUntil(next, stepInside, isCacChildEnd);
+			if (cacChildEnd) {
+				next = end === cacChildEnd
+					 ? stepInside(cacChildEnd)
+					 : stepPartial(cacChildEnd);
+				Dom.walk(next, stepOutside);
+			}
 		}
-		// Because we need an override to start with, which may be
-		// topmostOverride, but may be below topmostOverride and above
-		// or at cac.
-		var startOverrideNode = Dom.childAndParentsUntilIncl(range.commonAncestorContainer, getOverride)[0];
-		var startOverride = getOverride(startOverrideNode);
-		function carryDown(node, override) {
-			return getOverride(node) || override || startOverride;
-		}
-		var carryDown   = getOverride;
-		var ascend      = clearOverride;
-		var stepOutside = pushDownOverride;
-		var stepInside  = clearOverrideRec;
-		// Because the common ancestor container may be removed by clearOverride.
-		var cacParent = range.commonAncestorContainer.parentNode;
-		var cac = walkBoundary(range, carryDown, ascend, stepOutside, stepInside);
-		var ascendNodes = Dom.childAndParentsUntilIncl(cac || cacParent, isTopmostOverride);
-		ascendWalkSiblings(ascendNodes, false, carryDown, ascend, stepOutside, stepOutside);
+	}
+
+	/**
+	 * Requires range's boundary points to be between nodes
+	 * (Dom.splitTextContainers).
+	 */
+	function pushDownContext(range, pushDownFrom, cacOverride, getOverride, clearOverride, clearOverrideRec, pushDownOverride) {
+		// Because range may be mutated during traversal.
+		var cac = range.commonAncestorContainer;
+		walkBoundary(range, getOverride, pushDownOverride, clearOverride, clearOverrideRec, cacOverride);
+		var fromCacToTop = Dom.childAndParentsUntilIncl(cac, function (node) {
+			return node === pushDownFrom;
+		});
+		ascendWalkSiblings(fromCacToTop, false, getOverride, pushDownOverride, clearOverride, pushDownOverride, null);
+		clearOverride(pushDownFrom);
+	}
+
+	function walkTopLevelContainedNodes(range, stepInside) {
+		walkBoundary(range, Fn.noop, Fn.noop, Fn.noop, stepInside, null);
 	}
 
 	/**
 	 * Walks around the boundaries of range and calls the given
-	 * functions with the nodes it encounters. This algorithm will not
-	 * by itself mutate anything, or depend on any mutations by the
-	 * given functions, except it will split the text nodes around the
-	 * boundaries and adjust the range properties once before starting
-	 * the walk.
+	 * functions with the nodes it encounters.
 	 *
 	 * The purpose of the walk is to either push-down or set a context
 	 * on all nodes within the range, and push-down any overrides that
 	 * exist along the bounderies of the range.
 	 *
-	 * An override is a context that conflicts with the context to
-	 * set.
+	 * An override is a context that overrides the context to set.
 	 *
 	 * Pushing-down a context means that an existing context-giving
-	 * ancestor element will be reused (if available) and setContext
+	 * ancestor element will be reused, if available, and setContext
 	 * will not be invoked.
 	 *
 	 * Pushing-down an override means that ancestors of the range's
@@ -165,62 +157,64 @@ define([
 	 * subset of the ancestors' children that is not contained by the
 	 * range will have the override applied via pushDownOverride().
 	 *
-	 * Doesn't handle the case where an ancestor of the node for which
-	 * isUpperBoundary() returns true, or the upper boundary node
-	 * itself, override the context. This could be when a bold element
-	 * is at the same time the upper boundary (for example when the bold
+	 * This algorithm will not by itself mutate anything, or depend on
+	 * any mutations by the given functions, except it will split the
+	 * text nodes around the boundaries and adjust the range properties
+	 * once before starting the walk.
+	 *
+	 * clearOverride, clearOverideRec, setContext, pushDownContext may
+	 * mutate the given node and it's previous siblings, and may insert
+	 * nextSiblings, and must return the nextSibling of the given node
+	 * (the nextSibling before any mutations).
+	 *
+	 * Doesn't handle the case where for example a bold element is at
+	 * the same time the upper boundary (for example when the bold
 	 * element itself is the editing host) and the client attempts to
 	 * set a non-bold context inside the bold element. To work around
 	 * this, setContext() could force a non-bold context by wrapping the
 	 * node with a <span style="font-weight: normal">.
 	 *
 	 * @param range
-	 * clearOverride - will be invoked recursively for contained nodes
-	 *   and shallowly for partially contained nodes.
-	 * setContext - will be invoked shallowly for top-level contained
-	 *   nodes.
-	 * pushDownOverride - will be invoked for left siblings of ancestors
-	 *   of startContainer, and for right siblings of ancestors of
-	 *   endContainer.
+	 * clearOverride    - invoked for partially contained nodes.
+	 * clearOverrideRec - invoked for top-level contained nodes.
+	 * setContext       - invoked for top-level contained nodes.
+	 * pushDownOverride - invoked for left siblings of ancestors
+	 *   of startContainer[startOffset], and for right siblings of
+	 *   ancestors of endContainer[endOffset].
 	 *
 	 * @param isUpperBoundary args (node). Identifies exclusive upper
 	 * boundary element, only elements below which will be modified.
 	 *
-	 * @param getOverride args (node). Returns a node's override, or
+	 * @param getOverride(node). Returns a node's override, or
 	 * null if the node does not provide an override. The topmost node
 	 * for which getOverride returns a non-null value is the topmost
 	 * override. If there is a topmost override, and it is below the
 	 * upper boundary element, it will be cleared and pushed down.
 	 *
-	 * @param clearOverride args (node). Should clear the given node of
-	 * an override. The given node may or may not have an override
+	 * @param clearOverride(node). Should clear the given node of an
+	 * override. The given node may or may not have an override
 	 * set. Will be called shallowly for all ancestors of start and end
-	 * containers (up to isUpperBoundary or isContext). May mutate the
-	 * given node's children and siblings. Returns either the given node
-	 * or a new node inserted in its place (as opposed to the next
-	 * sibling like pushDownOverride and setContext).
+	 * containers (up to isUpperBoundary or isContext). May perform
+	 * mutations as explained above.
 	 *
-	 * @parma clearOverrideRec args (node). Like clearOverride but
-	 * should clear the context recursively. Returns either the given
-	 * node or a new node inserted in its place.
+	 * @parma clearOverrideRec(node). Like clearOverride but
+	 * should clear the override recursively.
 	 *
-	 * @param pushDownOverride args (node, override). Applies the given
+	 * @param pushDownOverride(node, override). Applies the given
 	 * override to node. Should check whether the given node doesn't
 	 * already provide its own override, in which case the given
-	 * override should not be applied. May mutate the given node's
-	 * children or siblings. Returns the nextSibling, either of the
-	 * given node or of a new node inserted in its place.
+	 * override should not be applied. May perform mutations as
+	 * explained above.
 	 *
-	 * @param isContext args (node). Returns true if the given node
+	 * @param isContext(node). Returns true if the given node
 	 * already provides the context to set.
 	 *
-	 * @param setContext args (node). Applies the context to the given
-	 * node. Should clear context recursively to avoid unnecessarily
-	 * nested contexts. May mutate the given node's children or
-	 * siblings. Returns the nextSibling, either of the given node or of
-	 * a new node inserted in its place.
+	 * @param setContext(node, hasOverrideAncestor). Applies the context
+	 * to the given node. Should clear overrides recursively. Should
+	 * also clear context recursively to avoid unnecessarily nested
+	 * contexts. May perform mutations as explained above.
 	 */
-	function mutate(range, isUpperBoundary, getOverride, clearOverride, clearOverrideRec, pushDownOverride, isContext, setContext) {
+	function mutate(range, isUpperBoundary, getOverride, clearOverride, clearOverrideRec, pushDownOverride, isContext, setContext, rootHasContext) {
 		// Because we should avoid splitTextContainers() if this call is a noop.
 		if (range.collapsed) {
 			return;
@@ -228,67 +222,90 @@ define([
 		// Because pushDown() and walkBoundary() require boundary points
 		// to be between nodes.
 		Dom.splitTextContainers(range);
+		// Because range may be mutated during traversal.
+		var cac = range.commonAncestorContainer;
 		var topmostOverrideNode = null;
-		var topmostContextNode = null;
+		var bottommostOverrideNode = null;
 		var isNonClearableOverride = false;
-		var beyondUpperBoundary = false;
-		var allCacAncestors = Dom.childAndParentsUntilIncl(range.commonAncestorContainer, Fn.returnFalse);
-		Arrays.forEach(allCacAncestors, function (node) {
-			beyondUpperBoundary = beyondUpperBoundary || isUpperBoundary(node);
+		var upperBoundaryAndBeyond = false;
+		var fromCacToContext = Dom.childAndParentsUntilIncl(cac, isContext);
+		Arrays.forEach(fromCacToContext, function (node) {
+			upperBoundaryAndBeyond = upperBoundaryAndBeyond || isUpperBoundary(node);
 			if (getOverride(node)) {
 				topmostOverrideNode = node;
-				isNonClearableOverride = beyondUpperBoundary;
-			}
-			if (isContext(node)) {
-				topmostContextNode = node;
+				isNonClearableOverride = upperBoundaryAndBeyond;
+				bottommostOverrideNode = bottommostOverrideNode || node;
 			}
 		});
-		if (topmostOverrideNode && !isNonClearableOverride) {
-			pushDownContext(range, topmostOverrideNode, getOverride, clearOverride, clearOverrideRec, pushDownOverride);
-		} else if (!topmostContextNode || isNonClearableOverride) {
-			walkBoundary(range, Fn.noop, Fn.noop, Fn.noop, setContext);
+		if ((rootHasContext || isContext(fromCacToContext[fromCacToContext.length - 1]))
+			    && !isNonClearableOverride) {
+			var pushDownFrom = topmostOverrideNode || cac;
+			var cacOverride = getOverride(bottommostOverrideNode || cac);
+			pushDownContext(range, pushDownFrom, cacOverride, getOverride, clearOverride, clearOverrideRec, pushDownOverride);
+		} else {
+			walkTopLevelContainedNodes(range, function (node) {
+				return setContext(node, isNonClearableOverride);
+			});
 		}
 	}
 
 	function format(range, nodeName, unformat) {
 		function getOverride(node) {
-			return unformat && nodeName === node.nodeName;
+			if (!unformat) {
+				return null;
+			}
+			return nodeName === node.nodeName;
 		}
 		function clearOverride(node) {
-			if (unformat && node.nodeName === node.nodeName) {
-				Dom.shallowRemove(node);
-				return
+			var next = node.nextSibling;
+			if (unformat && nodeName === node.nodeName) {
+				Dom.shallowRemove(node, range);
 			}
-			return node;
+			return next;
 		}
 		function clearOverrideRec(node) {
-			return Dom.walkRec(node, function (node) {
-				node = clearOverride(node);
-				return node ? node.nextSibling : null;
-			});
+			return Dom.walkRec(node, clearOverride);
+		}
+		function clearContext(node) {
+			var next = node.nextSibling;
+			if (!unformat && nodeName === node.nodeName) {
+				Dom.shallowRemove(node, range);
+			}
+			return next;
+		}
+		function clearContextRec(node) {
+			return Dom.walkRec(node, clearContext);
 		}
 		function pushDownOverride(node, override) {
 			if (!unformat) {
-				throw null;
+				throw "not implemented";
 			}
-			Dom.wrap(node, document.createElement(nodeName));
-			return null;
+			var wrapper = document.createElement(nodeName);
+			Dom.wrap(node, wrapper, range);
+			return wrapper.nextSibling;
 		}
 		function isContext(node) {
-			return (nodeName === node.nodeName) ^ unformat;
+			if (unformat) {
+				// Because we pass rootHasContext in the call to mutate,
+				// we don't really need this, but it is not incorrect.
+				return node.nodeName === 'BODY';
+			}
+			return nodeName === node.nodeName;
 		}
 		function setContext(node) {
 			if (unformat) {
-				throw null;
+				throw "not implemented";
 			}
-			node = Dom.walkRec(node, function (node) {
-				return clearOverride(node);
-			});
 			var wrapper = document.createElement(nodeName);
-			Dom.wrap(node, wrapper);
-			return wrapper;
+			Dom.wrap(node, wrapper, range);
+			Dom.walk(wrapper.firstChild, clearOverrideRec);
+			Dom.walk(wrapper.firstChild, clearContextRec);
+			return wrapper.nextSibling;
 		}
-		mutate(range, function (node) { return !node.parentNode; }, getOverride, clearOverride, clearOverrideRec, pushDownOverride, isContext, setContext);
+		function isUpperBoundary(node) {
+			return !node.parentNode;
+		}
+		mutate(range, isUpperBoundary, getOverride, clearOverride, clearOverrideRec, pushDownOverride, isContext, setContext, unformat);
 	}
 
 	return {

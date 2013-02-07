@@ -258,12 +258,20 @@ define([
 
 	function isAtEnd(node, offset) {
 		return 1 === node.nodeType
-			&& offset >= node.childNodes.length;
+			&& offset >= node.childNodes.length
+			|| 3 === node.nodeType
+			&& offset === node.length
+			&& !node.nextSibling;
 	}
 
+	/**
+	 * @param node if a text node, should have a parent node.
+	 */
 	function nodeAtOffset(node, offset) {
 		if (1 === node.nodeType && offset < node.childNodes.length) {
 			node = node.childNodes[offset];
+		} else if (3 === node.nodeType && offset === node.length) {
+			node = node.nextSibling || node.parentNode;
 		}
 		return node;
 	}
@@ -329,6 +337,7 @@ define([
 
 	/**
 	 * @param offset if node is a text node, the offset will be ignored.
+	 * @param node if a text node, should have a parent node.
 	 */
 	function cursorFromBoundaryPoint(node, offset) {
 		return cursor(nodeAtOffset(node, offset), isAtEnd(node, offset));
@@ -353,21 +362,22 @@ define([
 		return parents;
 	}
 
-	function childAndParentsUntilWithFn(node, pred, parentsUntilFn) {
+	function childAndParentsUntil(node, pred) {
 		if (pred(node)) {
-			return [node];
+			return [];
 		}
-		var parents = parentsUntilFn(node, pred);
+		var parents = parentsUntil(node, pred);
 		parents.unshift(node);
 		return parents;
 	}
 
-	function childAndParentsUntil(node, pred) {
-		return childAndParentsUntilWithFn(node, pred, parentsUntil);
-	}
-
 	function childAndParentsUntilIncl(node, pred) {
-		return childAndParentsUntilWithFn(node, pred, parentsUntilIncl);
+		if (pred(node)) {
+			return [node];
+		}
+		var parents = parentsUntilIncl(node, pred);
+		parents.unshift(node);
+		return parents;
 	}
 
 	function splitTextNode(node, offset) {
@@ -386,53 +396,48 @@ define([
 		return before;
 	}
 
-	function adjustRangeAfterSplit(range, rangeContainer, rangeOffset, setProp, splitNode, newNodeBeforeSplit) {
-		if (rangeContainer !== splitNode) {
+	function adjustRangeAfterSplit(range, container, offset, setProp, splitNode, newNodeBeforeSplit) {
+		if (container !== splitNode) {
 			return;
 		}
 		var newNodeLength = newNodeBeforeSplit.length;
-		if (rangeOffset === 0) {
-			rangeContainer = newNodeBeforeSplit.parentNode;
-			rangeOffset = nodeIndex(newNodeBeforeSplit);
-		} else if (rangeOffset < newNodeLength) {
-			rangeContainer = newNodeBeforeSplit;
-		} else if (rangeOffset === newNodeLength) {
-			rangeContainer = newNodeBeforeSplit.parentNode;
-			rangeOffset = nodeIndex(newNodeBeforeSplit) + 1;
-		} else {// rangeOffset > newNodeLength
+		if (offset === 0) {
+			container = newNodeBeforeSplit.parentNode;
+			offset = nodeIndex(newNodeBeforeSplit);
+		} else if (offset < newNodeLength) {
+			container = newNodeBeforeSplit;
+		} else if (offset === newNodeLength) {
+			container = newNodeBeforeSplit.parentNode;
+			offset = nodeIndex(newNodeBeforeSplit) + 1;
+		} else {// offset > newNodeLength
 			var newNodeAfterSplit = newNodeBeforeSplit.nextSibling;
-			rangeContainer = newNodeAfterSplit;
-			rangeOffset -= newNodeLength;
+			container = newNodeAfterSplit;
+			offset -= newNodeLength;
 		}
-		range[setProp].call(range, rangeContainer, rangeOffset);
+		range[setProp].call(range, container, offset);
 	}
 
-	function splitNodeAdjustRange(splitNode, splitOffset, range) {
+	function splitNodeAdjustRange(splitNode, splitOffset, sc, so, ec, eo, range) {
 		if (3 !== splitNode.nodeType) {
 			return;
 		}
 		var newNodeBeforeSplit = splitTextNode(splitNode, splitOffset);
-		adjustRangeAfterSplit(range, range.startContainer, range.startOffset, 'setStart', splitNode, newNodeBeforeSplit);
-		adjustRangeAfterSplit(range, range.endContainer, range.endOffset, 'setEnd', splitNode, newNodeBeforeSplit);
+		adjustRangeAfterSplit(range, sc, so, 'setStart', splitNode, newNodeBeforeSplit);
+		adjustRangeAfterSplit(range, ec, eo, 'setEnd', splitNode, newNodeBeforeSplit);
 	}
 
-	/**
-	 * Guarantees that after the split, the boundary points will be
-	 * between nodes, as oppsed to between text.
-	 */
 	function splitTextContainers(range) {
-		var origRange = {
-			startContainer: range.startContainer,
-			startOffset: range.startOffset,
-			endContainer: range.endContainer,
-			endOffset: range.endOffset,
-			setStart: function (x, y) { this.startContainer = x; this.startOffset = y; },
-			setEnd: function (x, y) { this.endContainer = x; this.endOffset = y; }
-		};
-		splitNodeAdjustRange(origRange.startContainer, origRange.startOffset, origRange);
-		splitNodeAdjustRange(origRange.endContainer, origRange.endOffset, origRange);
-		range.setStart(origRange.startContainer, origRange.startOffset);
-		range.setEnd(origRange.endContainer, origRange.endOffset);
+		var sc = range.startContainer;
+		var so = range.startOffset;
+		var ec = range.endContainer;
+		var eo = range.endOffset;
+		splitNodeAdjustRange(sc, so, sc, so, ec, eo, range);
+		// Because the range may have been adjusted.
+		sc = range.startContainer;
+		so = range.startOffset;
+		ec = range.endContainer;
+		eo = range.endOffset;
+		splitNodeAdjustRange(ec, eo, sc, so, ec, eo, range);
 	}
 
 	function nodeIndex(node) {
@@ -444,21 +449,62 @@ define([
 		return ret;
 	}
 
-	function shallowRemove(node) {
-		var parent = node.parentNode;
-		moveNextAll(parent, node.firstChild, node);
-		parent.removeChild(node);
+	function adjustRangeAfterUnwrap(range, container, offset, node) {
+		if (container === node) {
+			return [node.parentNode, offset + nodeIndex(node)];
+		}
+		if (container === node.parentNode && offset > nodeIndex(node)) {
+			return [node.parentNode, offset + node.childNodes.length];
+		}
+		return null;
 	}
 
-	function wrap(node, wrapper) {
-		node.parentNode.insertBefore(wrapper, node);
-		wrapper.appendChild(node);
+	/**
+	 * Adjusted range may be outside wrapper.
+	 */
+	function adjustRangeAfterWrap(range, container, offset, node, wrapper) {
+		// Nothing to do - the range will be automatically correct after
+		// the node is wrapped.
+		return null;
+	}
+
+	function adjustRange(range, adjust, mutate, arg1, arg2) {
+		// Because we mustn't set an invalid range, we must set it only
+		// after performing the mutation.
+		var adjustStart, adjustEnd;
+		if (range) {
+			adjustStart = adjust(range, range.startContainer, range.startOffset, arg1, arg2);
+			adjustEnd   = adjust(range, range.endContainer, range.endOffset, arg1, arg2);
+		}
+		mutate(arg1, arg2);
+		if (adjustStart) {
+			range.setStart.apply(range, adjustStart);
+		}
+		if (adjustEnd) {
+			range.setEnd.apply(range, adjustEnd);
+		}
+	}
+
+	function shallowRemove(node, range) {
+		adjustRange(range, adjustRangeAfterUnwrap, function (node) {
+			var parent = node.parentNode;
+			moveNextAll(parent, node.firstChild, node);
+			parent.removeChild(node);
+		}, node);
+	}
+
+	function wrap(node, wrapper, range) {
+		adjustRange(range, adjustRangeAfterWrap, function (node, wrapper) {
+			node.parentNode.replaceChild(wrapper, node);
+			wrapper.appendChild(node);
+		}, node, wrapper);
 	}
 
 	function walkUntil(node, fn, until) {
 		while (node && !until(node)) {
 			node = fn(node);
 		}
+		return node;
 	}
 
 	function walk(node, fn) {

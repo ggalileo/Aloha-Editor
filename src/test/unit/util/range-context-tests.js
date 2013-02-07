@@ -72,14 +72,14 @@ Aloha.require([
 		}
 		function extractMarkers(node) {
 			if (3 !== node.nodeType) {
-				return node;
+				return node.nextSibling;
 			}
 			var text = node.nodeValue;
 			var parts = Strings.splitIncl(text, /[\[\{\}\]]/g);
 			// Because modifying every text node when there can be
 			// only two markers seems like too much overhead.
 			if (!Arrays.contains(markers, parts[0]) && parts.length < 2) {
-				return node;
+				return node.nextSibling;
 			}
 			// Because non-text splits must not be joined again.
 			var forceNextSplit = false;
@@ -94,7 +94,9 @@ Aloha.require([
 					node.parentNode.insertBefore(document.createTextNode(part), node);
 				}
 			});
-			return node.nextSibling;
+			var next = node.nextSibling;
+			node.parentNode.removeChild(node);
+			return next;
 		}
 		Dom.walkRec(rootElem, extractMarkers);
 		if (2 !== markersFound) {
@@ -150,6 +152,7 @@ Aloha.require([
 		};
 		t('<p>[Some text.]</p>', '<p>{<b>Some text.</b>}</p>');
 		t('<p><b>[Some text.]</b></p>', '<p><b>{Some text.}</b></p>');
+		t('<p>{<b>Some text.</b>}</p>', '<p>{<b>Some text.</b>}</p>');
 		t('<p><b><i>[Some text.]</i></b></p>', '<p><b><i>{Some text.}</i></b></p>');
 	});
 	test('RangeContext.format unformat', function () {
