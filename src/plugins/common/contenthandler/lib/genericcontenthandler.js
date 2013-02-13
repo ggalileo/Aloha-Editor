@@ -29,7 +29,7 @@ define([
 	'aloha',
 	'aloha/contenthandlermanager',
 	'contenthandler/contenthandler-utils',
-	'table/table-plugin-utils'
+    'plugins/common/table/lib/table-plugin-utils'
 ], function (
 	$,
 	Aloha,
@@ -38,6 +38,39 @@ define([
 	TableUtils
 ) {
 	'use strict';
+
+    var defaultConfig = {
+        handlers: {
+            prepareTables: true,
+            cleanLists: true,
+            removeComments: true,
+            unwrapTags: true,
+            removeStyles: true,
+            removeNamespacedElements: true,
+            transformFormattings: true,
+            transformLinks: false
+        }
+    };
+
+    var handlers = (function() {
+        var config = {};
+        var init = function() {
+            if (Aloha.settings.contentHandler
+                && Aloha.settings.contentHandler.handler
+                && Aloha.settings.contentHandler.handler.generic) {
+                config = jQuery.extend({}, defaultConfig.handlers, Aloha.settings.contentHandler.handler.generic);
+            } else {
+                config = defaultConfig.handlers;
+            }
+        };
+
+        return {
+            config: function() {
+                init();
+                return config;
+            }
+        };
+    })();
 
 	var GenericContentHandler = Manager.createHandler({
 
@@ -62,31 +95,24 @@ define([
 				return $content.html();
 			}
 
-			TableUtils.prepareContent($content);
-
-			this.cleanLists($content);
-			this.removeComments($content);
-			this.unwrapTags($content);
-			this.removeStyles($content);
-			this.removeNamespacedElements($content);
-			//this.transformLinks($content);
-
-			var transformFormatting = true;
-
-			if (Aloha.settings.contentHandler
-				&& Aloha.settings.contentHandler.handler
-				&& Aloha.settings.contentHandler.handler.generic
-				&& typeof Aloha.settings.contentHandler.handler.generic.transformFormattings !== 'undefinded'
-				&& !Aloha.settings.contentHandler.handler.generic.transformFormattings ) {
-				transformFormatting = false;
-			}
-
-			if (transformFormatting) {
-			    this.transformFormattings($content);
-			}
+            // Run each configured handler.
+            var handler, config = handlers.config();
+            for (handler in config) {
+                if (config[handler]) {
+                    this[handler]($content);
+                }
+            }
 
 			return $content.html();
 		},
+
+        /**
+         * Prepares table contents
+         * @param $content
+         */
+        prepareTables: function($content) {
+            TableUtils.prepareContent($content);
+        },
 
 		/**
 		 * Cleans lists.
