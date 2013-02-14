@@ -10,6 +10,11 @@ define([
             }
         };
 
+    Aloha.settings.contentHandler = Aloha.settings.contentHandler || {};
+    Aloha.settings.contentHandler.handler = Aloha.settings.contentHandler.handler || {};
+    Aloha.settings.contentHandler.handler.styleattribute =  Aloha.settings.contentHandler.handler.styleattribute || {};
+
+
     var init = function() {
         if (!config) {
             config = jQuery.extend(true, {}, defaults, Aloha.settings.contentHandler.handler.styleattribute.allowable);
