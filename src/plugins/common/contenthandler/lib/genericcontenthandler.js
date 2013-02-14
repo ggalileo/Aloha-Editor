@@ -30,13 +30,7 @@ define([
 	'aloha/contenthandlermanager',
 	'contenthandler/contenthandler-utils',
     'plugins/common/table/lib/table-plugin-utils'
-], function (
-	$,
-	Aloha,
-	Manager,
-	Utils,
-	TableUtils
-) {
+], function ($, Aloha, Manager, Utils, TableUtils ) {
 	'use strict';
 
     var defaultConfig = {

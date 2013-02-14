@@ -1,9 +1,9 @@
 /* sanitizecontenthandler.js is part of Aloha Editor project http://aloha-editor.org
  *
- * Aloha Editor is a WYSIWYG HTML5 inline editing library and editor. 
+ * Aloha Editor is a WYSIWYG HTML5 inline editing library and editor.
  * Copyright (c) 2010-2012 Gentics Software GmbH, Vienna, Austria.
- * Contributors http://aloha-editor.org/contribution.php 
- * 
+ * Contributors http://aloha-editor.org/contribution.php
+ *
  * Aloha Editor is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
  * as published by the Free Software Foundation; either version 2
@@ -17,7 +17,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- * 
+ *
  * As an additional permission to the GNU GPL version 2, you may distribute
  * non-source (e.g., minimized or compacted) forms of the Aloha-Editor
  * source code without the copy of the GNU GPL normally required,
@@ -31,12 +31,11 @@ define([
 	'aloha/plugin',
 	'aloha/console',
 	'vendor/sanitize'
-],
-function( Aloha, jQuery, ContentHandlerManager, Plugin, console ) {
+], function(Aloha, jQuery, ContentHandlerManager, Plugin, console) {
 	"use strict";
-	
+
 	var sanitize;
-	
+
 	// predefined set of sanitize options if no dynamic or custom config is used
 	if( !Aloha.defaults.sanitize ) {
 		Aloha.defaults.sanitize = {}
@@ -109,35 +108,90 @@ function( Aloha, jQuery, ContentHandlerManager, Plugin, console ) {
 		}
 	}
 
-	function initSanitize (configAllows) {
-		var 
-			filter = [ 'restricted', 'basic', 'relaxed' ],
-			config = Aloha.defaults.supports; // @TODO: needs to be implemented into all plugins
+    var sanitizers = (function() {
+        var defaultKey = '_default_';
+        var map = {};
+        // Filter to stop cleaning elements with contentEditable "false", added to all configs
+        var filters = [function(elem) {
+            return elem.contentEditable != "false";
+        }];
 
-		// @TODO think about Aloha.settings.contentHandler.sanitize name/options
-		if (Aloha.settings.contentHandler.sanitize &&
-			jQuery.inArray(Aloha.settings.contentHandler.sanitize, filter) > -1) {
-			config = Aloha.defaults.sanitize[Aloha.settings.contentHandler.sanitize];
-		} else {
-			// use relaxed filter by default
-			config = Aloha.defaults.sanitize.relaxed;
-		}
+        var initDefault = function() {
+            var config = Aloha.defaults.sanitize.relaxed;
 
-		// @TODO move to Aloha.settings.contentHandler.sanitize.allows ?
-		if (Aloha.settings.contentHandler.allows) {
-			config = Aloha.settings.contentHandler.allows;
-		}
+            if (Aloha.settings.contentHandler) {
+                if (Aloha.settings.contentHandler.allows) {
+                    config = Aloha.settings.contentHandler.allows;
+                } else if (Aloha.settings.contentHandler.sanitize && Aloha.defaults.sanitize[Aloha.settings.contentHandler.sanitize]) {
+                    config = Aloha.defaults.sanitize[Aloha.settings.contentHandler.sanitize];
+                }
+            }
 
-		if (configAllows) {
-			config = configAllows;
-		}
+            config.filters = filters;
 
-		// add a filter to stop cleaning elements with contentEditable "false"
-		config.filters = [function( elem ) {
-			return elem.contentEditable != "false";
-		}];
-		sanitize = new Sanitize( config, jQuery );
-	}
+            map[defaultKey] = new Sanitize(config, jQuery);
+        };
+
+        var initEditableSpecific = function() {
+            if (Aloha.settings.contentHandler &&
+                Aloha.settings.contentHandler.handler &&
+                Aloha.settings.contentHandler.handler.sanitize) {
+                var config, editableSelector;
+                for (editableSelector in Aloha.settings.contentHandler.handler.sanitize) {
+                    if (Aloha.settings.contentHandler.handler.sanitize.hasOwnProperty(editableSelector)) {
+                        config = Aloha.settings.contentHandler.handler.sanitize[editableSelector];
+                        config.filters = filters;
+                        editableSelector = /^[\.#]/.test(editableSelector) ? editableSelector : editableSelector.toLowerCase();
+                        map[editableSelector] = new Sanitize(config, jQuery);
+                    }
+                }
+            }
+        };
+
+        return {
+            init: function() {
+                if (!jQuery.isEmptyObject(map)) { return; }
+
+                initDefault();
+                initEditableSpecific();
+            },
+
+            instanceForEditable: function() {
+                var editableSelector = defaultKey;
+                if (Aloha.activeEditable) {
+                    var selector = null;
+
+                    var containerId = '#' + Aloha.activeEditable.getId();
+                    if (map[containerId]) {
+                        selector = containerId;
+                    }
+
+                    if (!selector) {
+                        var containerClasses = Aloha.activeEditable.obj.attr('class').split(' ');
+                        for (var i=0; i < containerClasses.length; i++) {
+                            if (map['.' + containerClasses[i]]) {
+                                selector = containerClasses[i];
+                                break;
+                            }
+                        }
+                    }
+
+                    if (!selector) {
+                        var containerTag = Aloha.activeEditable.obj.prop('tagName').toLowerCase();
+                        if (map[containerTag]) {
+                            selector = containerTag;
+                        }
+                    }
+
+                    if (selector) {
+                        editableSelector = selector;
+                    }
+                }
+
+                return map[editableSelector];
+            }
+        };
+    })();
 
 	var SanitizeContentHandler = ContentHandlerManager.createHandler({
 		/**
@@ -145,32 +199,7 @@ function( Aloha, jQuery, ContentHandlerManager, Plugin, console ) {
 		 * @param content
 		 */
 		handleContent: function( content )  {
-			var sanitizeConfig,
-				contentHandlerConfig;
-
-			if (Aloha.activeEditable &&
-				Aloha.settings.contentHandler &&
-				Aloha.settings.contentHandler.handler && Aloha.settings.contentHandler.handler.sanitize) {
-				// individual sanitize config per editable -- should support merging of configs from other plugins ...
-				if ( Aloha.settings.contentHandler.handler.sanitize ) {
-					contentHandlerConfig = Aloha.settings.contentHandler.handler.sanitize;
-				}
-				var containerId = contentHandlerConfig['#' + Aloha.activeEditable.getId()];
-				if (typeof containerId !== 'undefined') {
-					sanitizeConfig = contentHandlerConfig;
-				} else {
-					var containerClasses = Aloha.activeEditable.obj.attr('class').split(' ');
-					for ( var i=0; i < containerClasses.length; i++) {
-						if (typeof contentHandlerConfig['.' + containerClasses[i]] !== 'undefined') {
-							sanitizeConfig = contentHandlerConfig['.' + containerClasses[i]];
-						}
-					}
-				}
-			}
-
-			if ( typeof sanitize === 'undefined' || typeof sanitizeConfig !== 'undefined') {
-				initSanitize( sanitizeConfig );
-			}
+            sanitizers.init();
 
 			if ( typeof content === 'string' ){
 				content = jQuery( '<div>' + content + '</div>' ).get(0);
@@ -178,7 +207,7 @@ function( Aloha, jQuery, ContentHandlerManager, Plugin, console ) {
 				content = jQuery( '<div>' ).append(content).get(0);
 			}
 
-			return jQuery('<div>').append(sanitize.clean_node(content)).html();
+			return jQuery('<div>').append(sanitizers.instanceForEditable().clean_node(content)).html();
 		}
 	});
 
