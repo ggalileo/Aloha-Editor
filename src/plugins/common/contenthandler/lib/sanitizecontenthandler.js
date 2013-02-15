@@ -109,12 +109,20 @@ define([
 	}
 
     var sanitizers = (function() {
+        var idOrClassRegExp = /^[\.#]/;
         var defaultKey = '_default_';
         var map = {};
         // Filter to stop cleaning elements with contentEditable "false", added to all configs
         var filters = [function(elem) {
             return elem.contentEditable != "false";
         }];
+
+        var normalizeTagName = function(editableSelector) {
+            var isIdOrClass = function(selector) {
+                return idOrClassRegExp.test(selector);
+            };
+            return isIdOrClass(editableSelector) ? editableSelector : editableSelector.toLowerCase();
+        };
 
         var initDefault = function() {
             var config = Aloha.defaults.sanitize.relaxed;
