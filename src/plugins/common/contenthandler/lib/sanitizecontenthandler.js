@@ -149,6 +149,7 @@ define([
                     if (Aloha.settings.contentHandler.handler.sanitize.hasOwnProperty(editableSelector)) {
                         config = Aloha.settings.contentHandler.handler.sanitize[editableSelector];
                         config.filters = filters;
+                        editableSelector = normalizeTagName(editableSelector);
                         editableSelector = /^[\.#]/.test(editableSelector) ? editableSelector : editableSelector.toLowerCase();
                         map[editableSelector] = new Sanitize(config, jQuery);
                     }
