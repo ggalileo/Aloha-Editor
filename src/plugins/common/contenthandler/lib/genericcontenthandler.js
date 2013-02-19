@@ -173,6 +173,9 @@ define([
 			content.contents().each(function () {
 				if (this.nodeType === 8) {
 					$(this).remove();
+                } else if (this.nodeType == 3) {
+                    // In FF, comments appear as text nodes
+                    this.textContent = this.textContent.replace(/<!--[\s\S]*?-->/g, '');
 				} else {
 					// do recursion
 					that.removeComments($(this));
