@@ -1,8 +1,9 @@
 define([
-    'aloha/core',
-    'jquery',
-    'aloha/contenthandlermanager'
-], function(Aloha, jQuery, ContentHandlerManager) {
+    define([
+        'jquery',
+        'aloha',
+        'aloha/contenthandlermanager'
+    ], function($, Aloha, ContentHandlerManager) {
     var config = null,
         defaults = {
             supportedStyles: {
@@ -51,7 +52,7 @@ define([
 
     var cleanStyleAttribute = function($content) {
         $content.children().each(function() {
-            var $child = jQuery(this);
+            var $child = $(this);
             cleanStyleAttribute($child);
             cleanStyles(config, $child);
         });
@@ -61,7 +62,7 @@ define([
         handleContent: function(content)  {
             init();
 
-            $content = jQuery('<div/>').append(content);
+            $content = $('<div/>').append(content);
             cleanStyleAttribute($content);
             return $content.html();
         }
