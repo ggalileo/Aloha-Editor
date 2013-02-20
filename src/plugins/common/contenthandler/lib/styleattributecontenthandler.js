@@ -18,7 +18,7 @@ define([
 
     var init = function() {
         if (!config) {
-            config = jQuery.extend(true, {}, defaults, Aloha.settings.contentHandler.handler.styleattribute.allowable);
+            config = $.extend(true, {}, defaults, Aloha.settings.contentHandler.handler.styleattribute.allowable);
         }
     };
 
