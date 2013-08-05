@@ -3398,7 +3398,7 @@ define('util/json2', [], function () {
 				// Added try/catch as fix for issue #21
 				try {
 
-					var isNativeIE7 = (jQuery.browser.msie && jQuery.browser.version < 8 && (typeof document.documentMode === 'undefined'));
+					var isNativeIE7 = (Aloha.browser.msie && Aloha.browser.version < 8 && (typeof document.documentMode === 'undefined'));
 					if (!isNativeIE7) {
 						this.docSelection.empty();
 					}
@@ -6235,7 +6235,7 @@ define('aloha/core',[
 	 * @return {boolean} True if Aloha supports the current browser.
 	 */
 	function isBrowserSupported() {
-		var browser = $.browser;
+		var browser = Aloha.browser;
 		var version = browser.version;
 		return !(
 			// Chrome/Safari 4
@@ -6302,13 +6302,13 @@ define('aloha/core',[
 
 		// Because different css is to be applied based on what the user-agent
 		// supports.  For example: outlines do not render in IE7.
-		if ($.browser.webkit) {
+		if (Aloha.browser.webkit) {
 			$('html').addClass('aloha-webkit');
-		} else if ($.browser.opera) {
+		} else if (Aloha.browser.opera) {
 			$('html').addClass('aloha-opera');
-		} else if ($.browser.msie) {
-			$('html').addClass('aloha-ie' + parseInt($.browser.version, 10));
-		} else if ($.browser.mozilla) {
+		} else if (Aloha.browser.msie) {
+			$('html').addClass('aloha-ie' + parseInt(Aloha.browser.version, 10));
+		} else if (Aloha.browser.mozilla) {
 			$('html').addClass('aloha-mozilla');
 		}
 
@@ -6802,6 +6802,47 @@ define('aloha/core',[
 		 */
 		toString: function () {
 			return 'Aloha';
+		},
+
+		/**
+		 * Shim to replace $.browser
+		 *
+		 * @hide
+		 */
+		browser: function() {
+			function uaMatch( ua ) {
+				ua = ua.toLowerCase();
+
+				var match = /(chrome)[ \/]([\w.]+)/.exec( ua ) ||
+					/(webkit)[ \/]([\w.]+)/.exec( ua ) ||
+					/(opera)(?:.*version|)[ \/]([\w.]+)/.exec( ua ) ||
+					/(msie) ([\w.]+)/.exec( ua ) ||
+					ua.indexOf("compatible") < 0 && /(mozilla)(?:.*? rv:([\w.]+)|)/.exec( ua ) ||
+					[];
+
+				return {
+					browser: match[ 1 ] || "",
+					version: match[ 2 ] || "0"
+				};
+			};
+
+			matched = uaMatch( navigator.userAgent );
+			browser = {};
+
+			if ( matched.browser ) {
+				browser[ matched.browser ] = true;
+				browser.version = matched.version;
+			}
+
+			// Chrome is Webkit, but Webkit is also Safari.
+			if ( browser.chrome ) {
+				browser.webkit = true;
+			} else if ( browser.webkit ) {
+				browser.safari = true;
+			}
+
+			Aloha.browser = browser;
+
 		}
 	});
 
@@ -9634,7 +9675,7 @@ define('aloha/engine',['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Al
 
 		ref.style.height = 'auto';
 		ref.style.maxHeight = 'none';
-		if (!(jQuery.browser.msie && jQuery.browser.version < 8)) {
+		if (!(Aloha.browser.msie && Aloha.browser.version < 8)) {
 			ref.style.minHeight = '0';
 		}
 		var space = document.createTextNode('\u200b');
@@ -9648,7 +9689,7 @@ define('aloha/engine',['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Al
 
 		ref.style.height = origStyle.height;
 		ref.style.maxHeight = origStyle.maxHeight;
-		if (!(jQuery.browser.msie && jQuery.browser.version < 8)) {
+		if (!(Aloha.browser.msie && Aloha.browser.version < 8)) {
 			ref.style.minHeight = origStyle.minHeight;
 		}
 
@@ -9691,7 +9732,7 @@ define('aloha/engine',['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Al
 		ref.style.maxHeight = 'none';
 		ref.style.minHeight = '0';
 		// IE7 would ignore display:none in contentEditable, so we temporarily set it to false
-		if (jQuery.browser.msie && jQuery.browser.version <= 7) {
+		if (Aloha.browser.msie && Aloha.browser.version <= 7) {
 			ref.contentEditable = 'false';
 		}
 
@@ -9709,14 +9750,14 @@ define('aloha/engine',['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Al
 		ref.style.maxHeight = origStyle.maxHeight;
 		ref.style.minHeight = origStyle.minHeight;
 		// reset contentEditable for IE7
-		if (jQuery.browser.msie && jQuery.browser.version <= 7) {
+		if (Aloha.browser.msie && Aloha.browser.version <= 7) {
 			ref.contentEditable = origStyle.contentEditable;
 		}
 		br.style.display = origBrDisplay;
 
 		// https://github.com/alohaeditor/Aloha-Editor/issues/516
 		// look like it works in msie > 7
-		/* if (jQuery.browser.msie && jQuery.browser.version < 8) {
+		/* if (Aloha.browser.msie && Aloha.browser.version < 8) {
 		br.removeAttribute("style");
 		ref.removeAttribute("style");
 	} */
@@ -10155,7 +10196,7 @@ define('aloha/engine',['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Al
 		//    This invokation somehow crashes the ie7. We assume that the access of
 		//    shared expando attribute updates internal references which are not
 		//    correclty handled during clone();
-		if (jQuery.browser.msie && jQuery.browser.version >= 7 && typeof element.attributes[jQuery.expando] !== 'undefined') {
+		if (Aloha.browser.msie && Aloha.browser.version >= 7 && typeof element.attributes[jQuery.expando] !== 'undefined') {
 			jQuery(element).removeAttr(jQuery.expando);
 		}
 
@@ -12910,10 +12951,10 @@ define('aloha/engine',['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Al
 			return;
 		}
 
-		if (!jQuery.browser.msie) {
+		if (!Aloha.browser.msie) {
 			// for normal browsers, the end-br will do
 			container.appendChild(createEndBreak());
-		} else if (jQuery.browser.msie && jQuery.browser.version <= 7 && isHtmlElementInArray(container, ["p", "h1", "h2", "h3", "h4", "h5", "h6", "pre", "blockquote"])) {
+		} else if (Aloha.browser.msie && Aloha.browser.version <= 7 && isHtmlElementInArray(container, ["p", "h1", "h2", "h3", "h4", "h5", "h6", "pre", "blockquote"])) {
 			// for IE7, we need to insert a text node containing a single zero-width whitespace character
 			if (!container.firstChild) {
 				container.appendChild(document.createTextNode('\u200b'));
@@ -14936,7 +14977,7 @@ define('aloha/engine',['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Al
 			var i;
 
 			// special behaviour for skipping zero-width whitespaces in IE7
-			if (jQuery.browser.msie && jQuery.browser.version <= 7) {
+			if (Aloha.browser.msie && Aloha.browser.version <= 7) {
 				moveOverZWSP(range, false);
 			}
 
@@ -15038,7 +15079,7 @@ define('aloha/engine',['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Al
 			// when inserting a special char via the plugin
 			// there where problems deleting them again with backspace after insertation
 			// see https://github.com/alohaeditor/Aloha-Editor/issues/517
-			if (node.nodeType == $_.Node.TEXT_NODE && offset == 0 && jQuery.browser.msie) {
+			if (node.nodeType == $_.Node.TEXT_NODE && offset == 0 && Aloha.browser.msie) {
 				offset = 1;
 				range.setStart(node, offset);
 				range.setEnd(node, offset);
@@ -15518,7 +15559,7 @@ define('aloha/engine',['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Al
 	commands.forwarddelete = {
 		action: function (value, range) {
 			// special behaviour for skipping zero-width whitespaces in IE7
-			if (jQuery.browser.msie && jQuery.browser.version <= 7) {
+			if (Aloha.browser.msie && Aloha.browser.version <= 7) {
 				moveOverZWSP(range, true);
 			}
 
@@ -16085,7 +16126,7 @@ define('aloha/engine',['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Al
 
 			// IE7 is adding this styles: height: auto; min-height: 0px; max-height: none;
 			// with that there is the ugly "IE-editable-outline"
-			if (jQuery.browser.msie && jQuery.browser.version < 8) {
+			if (Aloha.browser.msie && Aloha.browser.version < 8) {
 				br.parentNode.removeAttribute("style");
 			}
 		}
@@ -18099,7 +18140,7 @@ define('aloha/selection',[
 					}
 
 					// setting the focus is needed for mozilla and IE 7 to have a working rangeObject.select()
-					if (Aloha.activeEditable && jQuery.browser.mozilla) {
+					if (Aloha.activeEditable && Aloha.browser.mozilla) {
 						Aloha.activeEditable.obj.focus();
 					}
 
@@ -18618,7 +18659,7 @@ define('aloha/selection',[
 
 				// make a fix for text nodes in <li>'s in ie
 				jQuery.each(objects2wrap, function (index, element) {
-					if (jQuery.browser.msie && element.nodeType == 3 && !element.nextSibling && !element.previousSibling && element.parentNode && element.parentNode.nodeName.toLowerCase() == 'li') {
+					if (Aloha.browser.msie && element.nodeType == 3 && !element.nextSibling && !element.previousSibling && element.parentNode && element.parentNode.nodeName.toLowerCase() == 'li') {
 						element.data = jQuery.trim(element.data);
 					}
 				});
@@ -19170,7 +19211,7 @@ define('aloha/selection',[
 	 */
 	function nestedListInIEWorkaround(range) {
 		var nextSibling;
-		if (jQuery.browser.msie && range.startContainer === range.endContainer && range.startOffset === range.endOffset && range.startContainer.nodeType == 3 && range.startOffset == range.startContainer.data.length && range.startContainer.nextSibling) {
+		if (Aloha.browser.msie && range.startContainer === range.endContainer && range.startOffset === range.endOffset && range.startContainer.nodeType == 3 && range.startOffset == range.startContainer.data.length && range.startContainer.nextSibling) {
 			nextSibling = range.startContainer.nextSibling;
 			if ('OL' === nextSibling.nodeName || 'UL' === nextSibling.nodeName) {
 				if (range.startContainer.data[range.startContainer.data.length - 1] == ' ') {
@@ -19646,7 +19687,7 @@ define('aloha/markup',[
 
 	var GENTICS = window.GENTICS;
 
-	var isOldIE = !!(jQuery.browser.msie && 9 > parseInt(jQuery.browser.version, 10));
+	var isOldIE = !!(Aloha.browser.msie && 9 > parseInt(Aloha.browser.version, 10));
 
 	function isBR(node) {
 		return 'BR' === node.nodeName;
@@ -20031,7 +20072,7 @@ define('aloha/markup',[
 			var sibling, offset;
 
 			// special handling for moving Cursor around zero-width whitespace in IE7
-			if (jQuery.browser.msie && parseInt(jQuery.browser.version, 10) <= 7 && isTextNode(node)) {
+			if (Aloha.browser.msie && parseInt(Aloha.browser.version, 10) <= 7 && isTextNode(node)) {
 				if (keyCode == 37) {
 					// moving left -> skip zwsp to the left
 					offset = range.startOffset;
@@ -20125,7 +20166,7 @@ define('aloha/markup',[
 		processEnter: function (rangeObject) {
 			if (rangeObject.splitObject) {
 				// now comes a very evil hack for ie, when the enter is pressed in a text node in an li element, we just append an empty text node
-				// if ( jQuery.browser.msie
+				// if ( Aloha.browser.msie
 				//      && GENTICS.Utils.Dom
 				//           .isListElement( rangeObject.splitObject ) ) {
 				//  jQuery( rangeObject.splitObject ).append(
@@ -20281,7 +20322,7 @@ define('aloha/markup',[
 		 */
 		needEndingBreak: function () {
 			// currently, all browser except IE need ending breaks
-			return !jQuery.browser.msie;
+			return !Aloha.browser.msie;
 		},
 
 		/**
@@ -20580,7 +20621,7 @@ define('aloha/markup',[
 		 * @return fillUpElement HTML Code
 		 */
 		getFillUpElement: function (splitObject) {
-			if (jQuery.browser.msie) {
+			if (Aloha.browser.msie) {
 				return false;
 			}
 			return jQuery('<br class="aloha-cleanme"/>');
@@ -21693,7 +21734,7 @@ define('util/maps',[], function () {
 define('util/browser',['jquery'], function ($) {
 	
 	return {
-		ie7: $.browser.msie && parseInt($.browser.version, 10) < 8
+		ie7: Aloha.browser.msie && parseInt(Aloha.browser.version, 10) < 8
 	};
 });
 
@@ -23028,7 +23069,7 @@ define('aloha/editable',[
 				me.snapshotContent = me.getContents();
 
 				// FF bug: check for empty editable contents ( no <br>; no whitespace )
-				if (jQuery.browser.mozilla) {
+				if (Aloha.browser.mozilla) {
 					me.initEmptyEditable();
 				}
 
@@ -24353,7 +24394,7 @@ define('aloha/jquery.aloha',[
 		var ce = 'contenteditable';
 
 		// Check
-		if (jQuery.browser.msie && parseInt(jQuery.browser.version, 10) == 7) {
+		if (Aloha.browser.msie && parseInt(Aloha.browser.version, 10) == 7) {
 			ce = 'contentEditable';
 		}
 
@@ -24890,7 +24931,7 @@ define('aloha/sidebar',[
 			// ugliness.  Our solution is to fallback to swapping icon images.
 			// We set this as a sidebar property so that it can overridden by
 			// whoever thinks they are smarter than we are.
-			rotateIcons: !$.browser.msie,
+			rotateIcons: !Aloha.browser.msie,
 			overlayPage: true
 		};
 
@@ -29265,7 +29306,7 @@ Sanitize.prototype.clean_node = function(container) {
     var i, j, clone, parent_element, name, allowed_attributes, attr, attr_name, attr_node, protocols, del, attr_ok;
     var transform = _transform_element.call(this, elem);
     var jQuery = this.jQuery;
-    var isIE7 = jQuery.browser.msie && jQuery.browser.version === "7.0";
+    var isIE7 = Aloha.browser.msie && Aloha.browser.version === "7.0";
     
     elem = transform.node;
     name = elem.nodeName.toLowerCase();
@@ -30168,7 +30209,7 @@ define('paste/paste-plugin',[
 	 * @type {boolean}
 	 * @const
 	 */
-	var IS_IE = !!$.browser.msie;
+	var IS_IE = !!Aloha.browser.msie;
 
 	/**
 	 * Matches as string consisting of a single white space character.

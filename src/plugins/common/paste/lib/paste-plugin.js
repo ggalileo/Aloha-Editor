@@ -63,7 +63,7 @@ define([
 	 * @type {boolean}
 	 * @const
 	 */
-	var IS_IE = !!$.browser.msie;
+	var IS_IE = !!Aloha.browser.msie;
 
 	/**
 	 * Matches as string consisting of a single white space character.

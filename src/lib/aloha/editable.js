@@ -367,7 +367,7 @@ define([
 				me.snapshotContent = me.getContents();
 
 				// FF bug: check for empty editable contents ( no <br>; no whitespace )
-				if (jQuery.browser.mozilla) {
+				if (Aloha.browser.mozilla) {
 					me.initEmptyEditable();
 				}
 

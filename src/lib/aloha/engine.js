@@ -1075,7 +1075,7 @@ define(['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Aloha, $_, jQuery
 
 		ref.style.height = 'auto';
 		ref.style.maxHeight = 'none';
-		if (!(jQuery.browser.msie && jQuery.browser.version < 8)) {
+		if (!(Aloha.browser.msie && Aloha.browser.version < 8)) {
 			ref.style.minHeight = '0';
 		}
 		var space = document.createTextNode('\u200b');
@@ -1089,7 +1089,7 @@ define(['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Aloha, $_, jQuery
 
 		ref.style.height = origStyle.height;
 		ref.style.maxHeight = origStyle.maxHeight;
-		if (!(jQuery.browser.msie && jQuery.browser.version < 8)) {
+		if (!(Aloha.browser.msie && Aloha.browser.version < 8)) {
 			ref.style.minHeight = origStyle.minHeight;
 		}
 
@@ -1132,7 +1132,7 @@ define(['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Aloha, $_, jQuery
 		ref.style.maxHeight = 'none';
 		ref.style.minHeight = '0';
 		// IE7 would ignore display:none in contentEditable, so we temporarily set it to false
-		if (jQuery.browser.msie && jQuery.browser.version <= 7) {
+		if (Aloha.browser.msie && Aloha.browser.version <= 7) {
 			ref.contentEditable = 'false';
 		}
 
@@ -1150,14 +1150,14 @@ define(['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Aloha, $_, jQuery
 		ref.style.maxHeight = origStyle.maxHeight;
 		ref.style.minHeight = origStyle.minHeight;
 		// reset contentEditable for IE7
-		if (jQuery.browser.msie && jQuery.browser.version <= 7) {
+		if (Aloha.browser.msie && Aloha.browser.version <= 7) {
 			ref.contentEditable = origStyle.contentEditable;
 		}
 		br.style.display = origBrDisplay;
 
 		// https://github.com/alohaeditor/Aloha-Editor/issues/516
 		// look like it works in msie > 7
-		/* if (jQuery.browser.msie && jQuery.browser.version < 8) {
+		/* if (Aloha.browser.msie && Aloha.browser.version < 8) {
 		br.removeAttribute("style");
 		ref.removeAttribute("style");
 	} */
@@ -1596,7 +1596,7 @@ define(['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Aloha, $_, jQuery
 		//    This invokation somehow crashes the ie7. We assume that the access of
 		//    shared expando attribute updates internal references which are not
 		//    correclty handled during clone();
-		if (jQuery.browser.msie && jQuery.browser.version >= 7 && typeof element.attributes[jQuery.expando] !== 'undefined') {
+		if (Aloha.browser.msie && Aloha.browser.version >= 7 && typeof element.attributes[jQuery.expando] !== 'undefined') {
 			jQuery(element).removeAttr(jQuery.expando);
 		}
 
@@ -4351,10 +4351,10 @@ define(['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Aloha, $_, jQuery
 			return;
 		}
 
-		if (!jQuery.browser.msie) {
+		if (!Aloha.browser.msie) {
 			// for normal browsers, the end-br will do
 			container.appendChild(createEndBreak());
-		} else if (jQuery.browser.msie && jQuery.browser.version <= 7 && isHtmlElementInArray(container, ["p", "h1", "h2", "h3", "h4", "h5", "h6", "pre", "blockquote"])) {
+		} else if (Aloha.browser.msie && Aloha.browser.version <= 7 && isHtmlElementInArray(container, ["p", "h1", "h2", "h3", "h4", "h5", "h6", "pre", "blockquote"])) {
 			// for IE7, we need to insert a text node containing a single zero-width whitespace character
 			if (!container.firstChild) {
 				container.appendChild(document.createTextNode('\u200b'));
@@ -6377,7 +6377,7 @@ define(['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Aloha, $_, jQuery
 			var i;
 
 			// special behaviour for skipping zero-width whitespaces in IE7
-			if (jQuery.browser.msie && jQuery.browser.version <= 7) {
+			if (Aloha.browser.msie && Aloha.browser.version <= 7) {
 				moveOverZWSP(range, false);
 			}
 
@@ -6479,7 +6479,7 @@ define(['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Aloha, $_, jQuery
 			// when inserting a special char via the plugin
 			// there where problems deleting them again with backspace after insertation
 			// see https://github.com/alohaeditor/Aloha-Editor/issues/517
-			if (node.nodeType == $_.Node.TEXT_NODE && offset == 0 && jQuery.browser.msie) {
+			if (node.nodeType == $_.Node.TEXT_NODE && offset == 0 && Aloha.browser.msie) {
 				offset = 1;
 				range.setStart(node, offset);
 				range.setEnd(node, offset);
@@ -6959,7 +6959,7 @@ define(['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Aloha, $_, jQuery
 	commands.forwarddelete = {
 		action: function (value, range) {
 			// special behaviour for skipping zero-width whitespaces in IE7
-			if (jQuery.browser.msie && jQuery.browser.version <= 7) {
+			if (Aloha.browser.msie && Aloha.browser.version <= 7) {
 				moveOverZWSP(range, true);
 			}
 
@@ -7526,7 +7526,7 @@ define(['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Aloha, $_, jQuery
 
 			// IE7 is adding this styles: height: auto; min-height: 0px; max-height: none;
 			// with that there is the ugly "IE-editable-outline"
-			if (jQuery.browser.msie && jQuery.browser.version < 8) {
+			if (Aloha.browser.msie && Aloha.browser.version < 8) {
 				br.parentNode.removeAttribute("style");
 			}
 		}

@@ -78,7 +78,7 @@ $.fn.extend({
 
 	scrollParent: function() {
 		var scrollParent;
-		if (($.browser.msie && (/(static|relative)/).test(this.css('position'))) || (/absolute/).test(this.css('position'))) {
+		if ((Aloha.browser.msie && (/(static|relative)/).test(this.css('position'))) || (/absolute/).test(this.css('position'))) {
 			scrollParent = this.parents().filter(function() {
 				return (/(relative|absolute|fixed)/).test($.curCSS(this,'position',1)) && (/(auto|scroll)/).test($.curCSS(this,'overflow',1)+$.curCSS(this,'overflow-y',1)+$.curCSS(this,'overflow-x',1));
 			}).eq(0);
@@ -859,7 +859,7 @@ $.widget("ui.mouse", {
 
 	_mouseMove: function(event) {
 		// IE mouseup check - mouseup happened when mouse was out of window
-		if ($.browser.msie && !(document.documentMode >= 9) && !event.button) {
+		if (Aloha.browser.msie && !(document.documentMode >= 9) && !event.button) {
 			return this._mouseUp(event);
 		}
 
@@ -1235,7 +1235,7 @@ $.widget("ui.draggable", $.ui.mouse, {
 		}
 
 		if((this.offsetParent[0] == document.body) //This needs to be actually done for all browsers, since pageX/pageY includes this information
-		|| (this.offsetParent[0].tagName && this.offsetParent[0].tagName.toLowerCase() == 'html' && $.browser.msie)) //Ugly IE fix
+		|| (this.offsetParent[0].tagName && this.offsetParent[0].tagName.toLowerCase() == 'html' && Aloha.browser.msie)) //Ugly IE fix
 			po = { top: 0, left: 0 };
 
 		return {
@@ -1317,13 +1317,13 @@ $.widget("ui.draggable", $.ui.mouse, {
 				pos.top																	// The absolute mouse position
 				+ this.offset.relative.top * mod										// Only for relative positioned nodes: Relative offset from element to offset parent
 				+ this.offset.parent.top * mod											// The offsetParent's offset without borders (offset + border)
-				- ($.browser.safari && $.browser.version < 526 && this.cssPosition == 'fixed' ? 0 : ( this.cssPosition == 'fixed' ? -this.scrollParent.scrollTop() : ( scrollIsRootNode ? 0 : scroll.scrollTop() ) ) * mod)
+				- (Aloha.browser.safari && Aloha.browser.version < 526 && this.cssPosition == 'fixed' ? 0 : ( this.cssPosition == 'fixed' ? -this.scrollParent.scrollTop() : ( scrollIsRootNode ? 0 : scroll.scrollTop() ) ) * mod)
 			),
 			left: (
 				pos.left																// The absolute mouse position
 				+ this.offset.relative.left * mod										// Only for relative positioned nodes: Relative offset from element to offset parent
 				+ this.offset.parent.left * mod											// The offsetParent's offset without borders (offset + border)
-				- ($.browser.safari && $.browser.version < 526 && this.cssPosition == 'fixed' ? 0 : ( this.cssPosition == 'fixed' ? -this.scrollParent.scrollLeft() : scrollIsRootNode ? 0 : scroll.scrollLeft() ) * mod)
+				- (Aloha.browser.safari && Aloha.browser.version < 526 && this.cssPosition == 'fixed' ? 0 : ( this.cssPosition == 'fixed' ? -this.scrollParent.scrollLeft() : scrollIsRootNode ? 0 : scroll.scrollLeft() ) * mod)
 			)
 		};
 
@@ -1377,14 +1377,14 @@ $.widget("ui.draggable", $.ui.mouse, {
 				- this.offset.click.top													// Click offset (relative to the element)
 				- this.offset.relative.top												// Only for relative positioned nodes: Relative offset from element to offset parent
 				- this.offset.parent.top												// The offsetParent's offset without borders (offset + border)
-				+ ($.browser.safari && $.browser.version < 526 && this.cssPosition == 'fixed' ? 0 : ( this.cssPosition == 'fixed' ? -this.scrollParent.scrollTop() : ( scrollIsRootNode ? 0 : scroll.scrollTop() ) ))
+				+ (Aloha.browser.safari && Aloha.browser.version < 526 && this.cssPosition == 'fixed' ? 0 : ( this.cssPosition == 'fixed' ? -this.scrollParent.scrollTop() : ( scrollIsRootNode ? 0 : scroll.scrollTop() ) ))
 			),
 			left: (
 				pageX																// The absolute mouse position
 				- this.offset.click.left												// Click offset (relative to the element)
 				- this.offset.relative.left												// Only for relative positioned nodes: Relative offset from element to offset parent
 				- this.offset.parent.left												// The offsetParent's offset without borders (offset + border)
-				+ ($.browser.safari && $.browser.version < 526 && this.cssPosition == 'fixed' ? 0 : ( this.cssPosition == 'fixed' ? -this.scrollParent.scrollLeft() : scrollIsRootNode ? 0 : scroll.scrollLeft() ))
+				+ (Aloha.browser.safari && Aloha.browser.version < 526 && this.cssPosition == 'fixed' ? 0 : ( this.cssPosition == 'fixed' ? -this.scrollParent.scrollLeft() : scrollIsRootNode ? 0 : scroll.scrollLeft() ))
 			)
 		};
 
@@ -2082,7 +2082,7 @@ $.widget("ui.resizable", $.ui.mouse, {
 		if(this.element[0].nodeName.match(/canvas|textarea|input|select|button|img/i)) {
 
 			//Opera fix for relative positioning
-			if (/relative/.test(this.element.css('position')) && $.browser.opera)
+			if (/relative/.test(this.element.css('position')) && Aloha.browser.opera)
 				this.element.css({ position: 'relative', top: 'auto', left: 'auto' });
 
 			//Create a wrapper element and set the wrapper to the new current internal element
@@ -2279,7 +2279,7 @@ $.widget("ui.resizable", $.ui.mouse, {
 		}
 
 		//Opera fixing relative position
-		if ($.browser.opera && (/relative/).test(el.css('position')))
+		if (Aloha.browser.opera && (/relative/).test(el.css('position')))
 			el.css({ position: 'relative', top: 'auto', left: 'auto' });
 
 		this._renderProxy();
@@ -2322,7 +2322,7 @@ $.widget("ui.resizable", $.ui.mouse, {
 		if (!trigger) return false;
 
 		// Calculate the attrs that will be change
-		var data = trigger.apply(this, [event, dx, dy]), ie6 = $.browser.msie && $.browser.version < 7, csdif = this.sizeDiff;
+		var data = trigger.apply(this, [event, dx, dy]), ie6 = Aloha.browser.msie && Aloha.browser.version < 7, csdif = this.sizeDiff;
 
 		// Put this in the mouseDrag handler since the user can start pressing shift while resizing
 		this._updateVirtualBoundaries(event.shiftKey);
@@ -2485,7 +2485,7 @@ $.widget("ui.resizable", $.ui.mouse, {
 				});
 			}
 
-			if ($.browser.msie && !(!($(element).is(':hidden') || $(element).parents(':hidden').length)))
+			if (Aloha.browser.msie && !(!($(element).is(':hidden') || $(element).parents(':hidden').length)))
 				continue;
 
 			prel.css({
@@ -2507,7 +2507,7 @@ $.widget("ui.resizable", $.ui.mouse, {
 			this.helper = this.helper || $('<div style="overflow:hidden;"></div>');
 
 			// fix ie6 offset TODO: This seems broken
-			var ie6 = $.browser.msie && $.browser.version < 7, ie6offset = (ie6 ? 1 : 0),
+			var ie6 = Aloha.browser.msie && Aloha.browser.version < 7, ie6offset = (ie6 ? 1 : 0),
 			pxyoffset = ( ie6 ? 2 : -1 );
 
 			this.helper.addClass(this._helper).css({
@@ -2627,7 +2627,7 @@ $.ui.plugin.add("resizable", "alsoResize", {
 				});
 
 				// Opera fixing relative position
-				if ($.browser.opera && /relative/.test(el.css('position'))) {
+				if (Aloha.browser.opera && /relative/.test(el.css('position'))) {
 					self._revertToRelativePosition = true;
 					el.css({ position: 'absolute', top: 'auto', left: 'auto' });
 				}
@@ -3944,7 +3944,7 @@ $.widget("ui.sortable", $.ui.mouse, {
 		}
 
 		if((this.offsetParent[0] == document.body) //This needs to be actually done for all browsers, since pageX/pageY includes this information
-		|| (this.offsetParent[0].tagName && this.offsetParent[0].tagName.toLowerCase() == 'html' && $.browser.msie)) //Ugly IE fix
+		|| (this.offsetParent[0].tagName && this.offsetParent[0].tagName.toLowerCase() == 'html' && Aloha.browser.msie)) //Ugly IE fix
 			po = { top: 0, left: 0 };
 
 		return {
@@ -4019,13 +4019,13 @@ $.widget("ui.sortable", $.ui.mouse, {
 				pos.top																	// The absolute mouse position
 				+ this.offset.relative.top * mod										// Only for relative positioned nodes: Relative offset from element to offset parent
 				+ this.offset.parent.top * mod											// The offsetParent's offset without borders (offset + border)
-				- ($.browser.safari && this.cssPosition == 'fixed' ? 0 : ( this.cssPosition == 'fixed' ? -this.scrollParent.scrollTop() : ( scrollIsRootNode ? 0 : scroll.scrollTop() ) ) * mod)
+				- (Aloha.browser.safari && this.cssPosition == 'fixed' ? 0 : ( this.cssPosition == 'fixed' ? -this.scrollParent.scrollTop() : ( scrollIsRootNode ? 0 : scroll.scrollTop() ) ) * mod)
 			),
 			left: (
 				pos.left																// The absolute mouse position
 				+ this.offset.relative.left * mod										// Only for relative positioned nodes: Relative offset from element to offset parent
 				+ this.offset.parent.left * mod											// The offsetParent's offset without borders (offset + border)
-				- ($.browser.safari && this.cssPosition == 'fixed' ? 0 : ( this.cssPosition == 'fixed' ? -this.scrollParent.scrollLeft() : scrollIsRootNode ? 0 : scroll.scrollLeft() ) * mod)
+				- (Aloha.browser.safari && this.cssPosition == 'fixed' ? 0 : ( this.cssPosition == 'fixed' ? -this.scrollParent.scrollLeft() : scrollIsRootNode ? 0 : scroll.scrollLeft() ) * mod)
 			)
 		};
 
@@ -4076,14 +4076,14 @@ $.widget("ui.sortable", $.ui.mouse, {
 				- this.offset.click.top													// Click offset (relative to the element)
 				- this.offset.relative.top												// Only for relative positioned nodes: Relative offset from element to offset parent
 				- this.offset.parent.top												// The offsetParent's offset without borders (offset + border)
-				+ ($.browser.safari && this.cssPosition == 'fixed' ? 0 : ( this.cssPosition == 'fixed' ? -this.scrollParent.scrollTop() : ( scrollIsRootNode ? 0 : scroll.scrollTop() ) ))
+				+ (Aloha.browser.safari && this.cssPosition == 'fixed' ? 0 : ( this.cssPosition == 'fixed' ? -this.scrollParent.scrollTop() : ( scrollIsRootNode ? 0 : scroll.scrollTop() ) ))
 			),
 			left: (
 				pageX																// The absolute mouse position
 				- this.offset.click.left												// Click offset (relative to the element)
 				- this.offset.relative.left												// Only for relative positioned nodes: Relative offset from element to offset parent
 				- this.offset.parent.left												// The offsetParent's offset without borders (offset + border)
-				+ ($.browser.safari && this.cssPosition == 'fixed' ? 0 : ( this.cssPosition == 'fixed' ? -this.scrollParent.scrollLeft() : scrollIsRootNode ? 0 : scroll.scrollLeft() ))
+				+ (Aloha.browser.safari && this.cssPosition == 'fixed' ? 0 : ( this.cssPosition == 'fixed' ? -this.scrollParent.scrollLeft() : scrollIsRootNode ? 0 : scroll.scrollLeft() ))
 			)
 		};
 
@@ -6319,7 +6319,7 @@ $.widget( "ui.accordion", {
 		}
 
 		// only need links in tab order for Safari
-		if ( !$.browser.safari ) {
+		if ( !Aloha.browser.safari ) {
 			self.headers.find( "a" ).attr( "tabIndex", -1 );
 		}
 
@@ -8473,7 +8473,7 @@ $.extend(Datepicker.prototype, {
 			isFixed |= $(this).css('position') == 'fixed';
 			return !isFixed;
 		});
-		if (isFixed && $.browser.opera) { // correction for Opera when fixed and scrolled
+		if (isFixed && Aloha.browser.opera) { // correction for Opera when fixed and scrolled
 			$.datepicker._pos[0] -= document.documentElement.scrollLeft;
 			$.datepicker._pos[1] -= document.documentElement.scrollTop;
 		}
@@ -9385,7 +9385,7 @@ $.extend(Datepicker.prototype, {
 			}
 			html += group;
 		}
-		html += buttonPanel + ($.browser.msie && parseInt($.browser.version,10) < 7 && !inst.inline ?
+		html += buttonPanel + (Aloha.browser.msie && parseInt(Aloha.browser.version,10) < 7 && !inst.inline ?
 			'<iframe src="javascript:false;" class="ui-datepicker-cover" frameborder="0"></iframe>' : '');
 		inst._keyEvent = false;
 		return html;
@@ -9587,7 +9587,7 @@ function extendRemove(target, props) {
 
 /* Determine whether an object is an array. */
 function isArray(a) {
-	return (a && (($.browser.safari && typeof a == 'object' && a.length) ||
+	return (a && ((Aloha.browser.safari && typeof a == 'object' && a.length) ||
 		(a.constructor && a.constructor.toString().match(/\Array\(\)/))));
 };
 
@@ -10390,7 +10390,7 @@ $.extend( $.ui.dialog.overlay, {
 		var scrollHeight,
 			offsetHeight;
 		// handle IE
-		if ( $.browser.msie ) {
+		if ( Aloha.browser.msie ) {
 			scrollHeight = Math.max(
 				document.documentElement.scrollHeight,
 				document.body.scrollHeight
@@ -10415,7 +10415,7 @@ $.extend( $.ui.dialog.overlay, {
 		var scrollWidth,
 			offsetWidth;
 		// handle IE
-		if ( $.browser.msie ) {
+		if ( Aloha.browser.msie ) {
 			scrollWidth = Math.max(
 				document.documentElement.scrollWidth,
 				document.body.scrollWidth

@@ -141,7 +141,7 @@ Sanitize.prototype.clean_node = function(container) {
     var i, j, clone, parent_element, name, allowed_attributes, attr, attr_name, attr_node, protocols, del, attr_ok;
     var transform = _transform_element.call(this, elem);
     var jQuery = this.jQuery;
-    var isIE7 = jQuery.browser.msie && jQuery.browser.version === "7.0";
+    var isIE7 = Aloha.browser.msie && Aloha.browser.version === "7.0";
     
     elem = transform.node;
     name = elem.nodeName.toLowerCase();

@@ -82,13 +82,13 @@ $.layout = {
 	,	errContainerHeight:		"UI Layout Initialization Warning\n\nThe layout-container \"CONTAINER\" has no height.\n\nTherefore the layout is 0-height and hence 'invisible'!"
 	}
 
-	// can update code here if $.browser is phased out
+	// can update code here if Aloha.browser is phased out
 ,	browser: {
-		mozilla:	!!$.browser.mozilla
-	,	webkit:		!!$.browser.webkit || !!$.browser.safari // webkit = jQ 1.4
-	,	msie:		!!$.browser.msie
-	,	isIE6:		!!$.browser.msie && $.browser.version == 6
-	,	version:	$.browser.version // not used in Layout core, but may be used by plugins
+		mozilla:	!!Aloha.browser.mozilla
+	,	webkit:		!!Aloha.browser.webkit || !!Aloha.browser.safari // webkit = jQ 1.4
+	,	msie:		!!Aloha.browser.msie
+	,	isIE6:		!!Aloha.browser.msie && Aloha.browser.version == 6
+	,	version:	Aloha.browser.version // not used in Layout core, but may be used by plugins
 	}
 
 	// *PREDEFINED* EFFECTS & DEFAULTS 
