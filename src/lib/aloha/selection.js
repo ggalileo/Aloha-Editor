@@ -1051,7 +1051,7 @@ define([
 					}
 
 					// setting the focus is needed for mozilla and IE 7 to have a working rangeObject.select()
-					if (Aloha.activeEditable && jQuery.browser.mozilla) {
+					if (Aloha.activeEditable && Aloha.browser.mozilla) {
 						Aloha.activeEditable.obj.focus();
 					}
 
@@ -1570,7 +1570,7 @@ define([
 
 				// make a fix for text nodes in <li>'s in ie
 				jQuery.each(objects2wrap, function (index, element) {
-					if (jQuery.browser.msie && element.nodeType == 3 && !element.nextSibling && !element.previousSibling && element.parentNode && element.parentNode.nodeName.toLowerCase() == 'li') {
+					if (Aloha.browser.msie && element.nodeType == 3 && !element.nextSibling && !element.previousSibling && element.parentNode && element.parentNode.nodeName.toLowerCase() == 'li') {
 						element.data = jQuery.trim(element.data);
 					}
 				});
@@ -2122,7 +2122,7 @@ define([
 	 */
 	function nestedListInIEWorkaround(range) {
 		var nextSibling;
-		if (jQuery.browser.msie && range.startContainer === range.endContainer && range.startOffset === range.endOffset && range.startContainer.nodeType == 3 && range.startOffset == range.startContainer.data.length && range.startContainer.nextSibling) {
+		if (Aloha.browser.msie && range.startContainer === range.endContainer && range.startOffset === range.endOffset && range.startContainer.nodeType == 3 && range.startOffset == range.startContainer.data.length && range.startContainer.nextSibling) {
 			nextSibling = range.startContainer.nextSibling;
 			if ('OL' === nextSibling.nodeName || 'UL' === nextSibling.nodeName) {
 				if (range.startContainer.data[range.startContainer.data.length - 1] == ' ') {
