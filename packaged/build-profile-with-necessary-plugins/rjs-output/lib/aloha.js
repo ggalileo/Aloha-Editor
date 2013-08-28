@@ -30430,7 +30430,7 @@ define('paste/paste-plugin',[
                         try {
                             paste($CLIPBOARD, range, onInsert);
                         } catch (e) {
-                            if (console) {
+                            if (console && console.error) {
                                 console.error('Aloha Error (This is Generally Benign):', e);
                             }
                         }
