@@ -14877,6 +14877,10 @@ define('aloha/engine',['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Al
 			return function () {
 				var newParent = document.createElement("div");
 				newParent.setAttribute("style", "text-align: " + alignment);
+
+				//VN-2684.  Make it easier to find these divs (for ensuring advanced
+				//          toolbar justification functions)
+				newParent.setAttribute("data-justified-separately", true);
 				return newParent;
 			};
 		}
