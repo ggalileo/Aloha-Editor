@@ -138,11 +138,11 @@ define([
 				// be unwrap.
 				$node.contents().unwrap();
 			} else if ('o:p' === nodeName) { // Word specific character
-				// VN-2865: Remove the <o:p> tags.  It seems to stand for a new line
+				// Remove the <o:p> tags.  It seems to stand for a new line
 				$node.replaceWith('<br>');
 			} else if ('p' === nodeName) {
 
-				// VN-2865. Unwrap the paragraph tags so that the visual double space
+				// Unwrap the paragraph tags so that the visual double space
 				// does not appear
 				$node.contents().unwrap();
 			} else if ('td' !== nodeName && isEmpty($node)) {
