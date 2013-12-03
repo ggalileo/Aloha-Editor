@@ -6277,6 +6277,8 @@ define(['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Aloha, $_, jQuery
 			return function () {
 				var newParent = document.createElement("div");
 				newParent.setAttribute("style", "text-align: " + alignment);
+
+				newParent.setAttribute("data-justified-separately", true);
 				return newParent;
 			};
 		}

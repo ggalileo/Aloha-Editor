@@ -14877,6 +14877,8 @@ define('aloha/engine',['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Al
 			return function () {
 				var newParent = document.createElement("div");
 				newParent.setAttribute("style", "text-align: " + alignment);
+
+				newParent.setAttribute("data-justified-separately", true);
 				return newParent;
 			};
 		}
