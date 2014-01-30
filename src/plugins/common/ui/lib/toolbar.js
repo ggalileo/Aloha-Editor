@@ -18,6 +18,12 @@ define([
 ) {
 	'use strict';
 
+	function isFloatingEnabled() {
+		return !Aloha.settings
+			|| !Aloha.settings.toolbar
+			|| Aloha.settings.toolbar.floating !== false;
+	}
+
 	/**
 	 * The toolbar is configured via `settings.toolbar` and is defined as an
 	 * array of tabs with component groups, where the groups are arrays of
@@ -27,10 +33,10 @@ define([
 	 * for the active context are shown.
 	 *
 	 * As a container for tabs, the toolbar serves to group together groups of
-	 * control components so that they can be shown and hidden together in
-	 * their feature/functional set.  For exmaple groups of table controls
-	 * would be placed in a table tab, groups of list controls in an image tab,
-	 * and so forth.
+	 * control components so that they can be shown and hidden together in their
+	 * feature/functional set.  For example groups of table controls would be
+	 * placed in a table tab, groups of list controls in an image tab, and so
+	 * forth.
 	 *
 	 * Toolbar class and manager
 	 *
@@ -77,7 +83,9 @@ define([
 
 			// Pinning behaviour is global in that if one toolbar is pinned,
 			// then all other toolbars will be pinned to that position.
-			floating.makeFloating(this, Toolbar);
+			if (isFloatingEnabled()) {
+				floating.makeFloating(this, Toolbar);
+			}
 		},
 
 		adoptInto: function (slot, component) {
@@ -94,14 +102,15 @@ define([
 		},
 
 		/**
-		 * Moves the toolbar into position near the active editable.
+		 * Moves the toolbar into the optimal position near the active editable.
 		 *
 		 * @param {number} duration The length of time the moving animation
 		 *                          should run.
 		 */
 		_move: function (duration) {
 			// We need to order the invocation of the floating animation to
-			// occur after the the height of the toolbar's DOM been caluclated.
+			// occur after the the height of the toolbar's DOM has been
+			// caluclated.
 			var toolbar = this;
 			if (toolbar._moveTimeout) {
 				clearTimeout(toolbar._moveTimeout);
@@ -165,12 +174,14 @@ define([
 			Toolbar.$surfaceContainer.children().detach();
 			Toolbar.$surfaceContainer.append(this.$element);
 			Toolbar.$surfaceContainer.stop().fadeTo(200, 1);
-			var position = Toolbar.getFloatingPosition();
-			this.$element.stop().css({
-				top: position.top,
-				left: position.left
-			});
-			this._move();
+			if (isFloatingEnabled()) {
+				var position = Toolbar.getFloatingPosition();
+				this.$element.stop().css({
+					top: position.top,
+					left: position.left
+				});
+				this._move();
+			}
 		},
 
 		/**

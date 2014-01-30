@@ -54,6 +54,7 @@ define([
 	 *        objectTypeFilter -
 	 *        placeholder  -
 	 *        noTargetHighlight -
+	 *        targetHighlightCass - a class to be identify focused element
 	 *        cls          -
 	 *        width        -
 	 *        scope        -
@@ -62,18 +63,20 @@ define([
 	 */
 	var AttributeField = function (props) {
 		var valueField = props.valueField || 'id',
-		    displayField = props.displayField || 'name',
-		    objectTypeFilter = props.objectTypeFilter || ['all'],
-		    placeholder = props.placeholder,
-		    noTargetHighlight = !!props.noTargetHighlight,
-		    element = props.element ? $(props.element) : $('<input id="aloha-attribute-field-' + props.name + '">'),
-		    component,
-		    template,
-		    resourceItem,
-		    resourceValue,
-		    targetObject,
-		    targetAttribute,
-		    lastAttributeValue;
+			displayField = props.displayField || 'name',
+			objectTypeFilter = props.objectTypeFilter || ['all'],
+			placeholder = props.placeholder,
+			noTargetHighlight = !!props.noTargetHighlight,
+			targetHighlightClass = props.targetHighlightClass,
+			element = props.element ? $(props.element) : $('<input id="aloha-attribute-field-' + props.name + '">'),
+			component,
+			template,
+			resourceItem,
+			resourceValue,
+			targetObject,
+			targetAttribute,
+			lastAttributeValue,
+			additionalTargetObjects = [];
 
 		if (props.cls) {
 			element.addClass(props.cls);
@@ -126,10 +129,15 @@ define([
 		element
 			.bind("focus", onFocus)
 			.bind("blur", onBlur)
-		    .bind("keydown", onKeyDown)
+			.bind("keydown", onKeyDown)
 			.bind("keyup", onKeyup);
 
 		setPlaceholder();
+
+		// Because IE7 doesn't give us the blur event when the editable
+		// is deactivated and the toolbar disappears (other browsers do).
+		// TODO unbind, otherwise mermory leak
+		Aloha.bind('aloha-editable-deactivated', onBlur);
 
 		function onSelect(event, ui) {
 			if (ui.item) {
@@ -209,7 +217,32 @@ define([
 			}
 		}
 
+		/**
+		 * Execute a function for every targets this attribute
+		 *
+		 * fields is pointing to.
+		 * @param {Function} fn Function to execute for each target
+		 */
+		function executeForTargets(fn) {
+			var target = $(targetObject);
+			fn(target);
+			for (var i = 0, len = additionalTargetObjects.length; i < len ; i++) {
+				fn($(additionalTargetObjects[i]));
+			}
+		}
+
+		/**
+		 * Change target background so the targets are
+		 * highlighted
+		 */
 		function changeTargetBackground() {
+			var target = $(targetObject);
+			if (targetHighlightClass) {
+				executeForTargets(function (target) {
+					target.addClass(targetHighlightClass)
+				});
+			}
+
 			if (noTargetHighlight) {
 				return;
 			}
@@ -220,28 +253,41 @@ define([
 			restoreTargetBackground();
 
 			// set background color to give visual feedback which link is modified
-			var	target = $(targetObject);
-			if (target && target.context && target.context.style &&
+			if (target.context && target.context.style &&
 				target.context.style['background-color']) {
-				target.attr('data-original-background-color',
-							target.context.style['background-color']);
+				executeForTargets(function (target) {
+					target.attr('data-original-background-color',
+					            target.context.style['background-color']);
+				});
 			}
-			target.css('background-color', '#80B5F2');
+			executeForTargets(function (target) {
+				target.css('background-color', '#80B5F2');
+			});
 		}
 
 		function restoreTargetBackground() {
+			var target = $(targetObject);
+			if (targetHighlightClass) {
+				executeForTargets(function (target) {
+					target.removeClass(targetHighlightClass);
+				});
+			}
 			if (noTargetHighlight) {
 				return;
 			}
-			var target = $(targetObject);
 			// Remove the highlighting and restore original color if was set before
 			var color = target.attr('data-original-background-color');
-			if (color) {
-				target.css('background-color', color);
-			} else {
-				target.css('background-color', '');
+			executeForTargets(function (target) {
+				target.css('background-color', color || '');
+			});
+			if (!target.attr('style')) {
+				executeForTargets(function (target) {
+					target.removeAttr('style');
+				});
 			}
-			target.removeAttr('data-original-background-color');
+			executeForTargets(function (target) {
+				target.removeAttr('data-original-background-color');
+			});
 		}
 
 		function parse(template, item) {
@@ -251,7 +297,7 @@ define([
 		}
 
 		function setPlaceholder() {
-			if (null == placeholder) {
+			if (null === placeholder) {
 				return;
 			}
 			element.css('color', '#AAA');
@@ -320,20 +366,12 @@ define([
 		function setAttribute(attr, value, regex, reference) {
 			if (targetObject) {
 				// check if a reference value is submitted to check against with a regex
-				var setAttr = true;
-				if (typeof reference != 'undefined') {
-					var regxp = new RegExp(regex);
-					if ( ! reference.match(regxp) ) {
-						setAttr = false;
-					}
-				}
-
-				// if no regex was successful or no reference value
-				// was submitted remove the attribute
-				if ( setAttr ) {
-					$(targetObject).attr(attr, value);
-				} else {
+				if (typeof reference !== 'undefined' && !reference.match(new RegExp(regex))) {
 					$(targetObject).removeAttr(attr);
+				} else {
+					executeForTargets(function (target) {
+						target.attr(attr, value);
+					});
 				}
 			}
 		}
@@ -347,6 +385,7 @@ define([
 		function setTargetObject(obj, attr) {
 			targetObject = obj;
 			targetAttribute = attr;
+			additionalTargetObjects = [];
 
 			setItem(null);
 			
@@ -364,6 +403,10 @@ define([
 					setItem(items[0]);
 				}
 			} );
+		}
+
+		function addAdditionalTargetObject(targetObj) {
+			additionalTargetObjects.push(targetObj);
 		}
 
 		function getTargetObject() {
@@ -399,6 +442,10 @@ define([
 			return element[0];
 		}
 
+		function getInputJQuery() {
+			return element;
+		}
+
 		var attrField = {
 			getInputElem: getInputElem,
 			hasInputElem: hasInputElem,
@@ -409,6 +456,7 @@ define([
 			focus: focus,
 			getTargetObject: getTargetObject,
 			setTargetObject: setTargetObject,
+			addAdditionalTargetObject: addAdditionalTargetObject,
 			setAttribute: setAttribute,
 			getItem: getItem,
 			setItem: setItem,
@@ -417,11 +465,12 @@ define([
 			addListener: addListener,
 			setObjectTypeFilter: setObjectTypeFilter,
 			setTemplate: setTemplate,
-			setPlaceholder: setPlaceholder
+			setPlaceholder: setPlaceholder,
+			getInputJQuery: getInputJQuery
 		};
 
 		return attrField;
-	}
+	};
 
 	return AttributeField;
 });

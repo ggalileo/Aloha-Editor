@@ -1,12 +1,69 @@
-define(['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Aloha, $_, jQuery) {
+define([
+	'aloha/core',
+	'aloha/ecma5shims',
+	'util/maps',
+	'util/html',
+	'util/dom',
+	'jquery'
+], function (
+	Aloha,
+	$_,
+	Maps,
+	Html,
+	Dom,
+	jQuery
+) {
 	"use strict";
 
+	/**
+	 *
+	 * @param obj
+	 * @param attr
+	 * @returns {Boolean} true
+	 */
 	function hasAttribute(obj, attr) {
 		var native_method = obj.hasAttribute;
 		if (native_method) {
 			return obj.hasAttribute(attr);
 		}
-		return (typeof obj.attributes[attr] != "undefined");
+		return (typeof obj.attributes[attr] !== 'undefined');
+	}
+
+	/**
+	 * Insert the node `node` after `preceding`.
+	 *
+	 * @param {Element} node
+	 * @param {Element} preceding
+	 * @return {Element}
+	 */
+	function insertAfter(node, preceding) {
+		var next = preceding.nextSibling,
+		    parent = preceding.parentNode;
+		if (next) {
+			parent.insertBefore(node, next);
+		} else {
+			parent.appendChild(node);
+		}
+		return node;
+	}
+
+	/**
+	 * Splits text node `node` at the given text index.
+	 *
+	 * Note that we cannot use splitText() because it is bugridden in IE 9.
+	 *
+	 * Borrowed from rangy.
+	 *
+	 * @param {Element} node
+	 * @param {number} index
+	 * @return {Element}
+	 */
+	function splitText(node, index) {
+		var newNode = node.cloneNode(false);
+		newNode.deleteData(0, index);
+		node.deleteData(index, node.length - index);
+		insertAfter(newNode, node);
+		return newNode;
 	}
 
 	var htmlNamespace = "http://www.w3.org/1999/xhtml";
@@ -304,15 +361,6 @@ define(['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Aloha, $_, jQuery
 	///////////////////////////////////////////////////////////////////////////////
 	//@{
 
-	function getNodeIndex(node) {
-		var ret = 0;
-		while (node.previousSibling) {
-			ret++;
-			node = node.previousSibling;
-		}
-		return ret;
-	}
-
 	// "The length of a Node node is the following, depending on node:
 	//
 	// ProcessingInstruction
@@ -383,7 +431,7 @@ define(['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Aloha, $_, jQuery
 			}
 
 			// "If the index of child is less than offset A, return after."
-			if (getNodeIndex(child) < offsetA) {
+			if (Dom.getIndexInParent(child) < offsetA) {
 				return "after";
 			}
 		}
@@ -557,7 +605,7 @@ define(['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Aloha, $_, jQuery
 		var matches = /^rgb\(([0-9]+), ([0-9]+), ([0-9]+)\)$/.exec(color);
 		if (matches) {
 			return "#" + parseInt(matches[1], 10).toString(16).replace(/^.$/, "0$&") + parseInt(matches[2], 10).toString(16).replace(/^.$/, "0$&") + parseInt(matches[3], 10).toString(16).replace(/^.$/, "0$&");
-		} else if ( /^#[abcdef0123456789]+$/i.exec(color) ) {
+		} else if (/^#[abcdef0123456789]+$/i.exec(color)) {
 			// return hexadecimal color values (as returned by IE 7/8)
 			return color;
 		}
@@ -577,6 +625,7 @@ define(['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Aloha, $_, jQuery
 
 	var getStateOverride,
 	    setStateOverride,
+	    resetOverrides,
 	    unsetStateOverride,
 	    getValueOverride,
 	    setValueOverride,
@@ -718,27 +767,8 @@ define(['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Aloha, $_, jQuery
 		var ret;
 
 		// Set up our global range magic, but only if we're the outermost function
-		if (executionStackDepth == 0 && typeof range != "undefined") {
+		if (executionStackDepth === 0) {
 			globalRange = range;
-		} else if (executionStackDepth == 0) {
-			globalRange = null;
-			globalRange = range;
-		}
-
-		// "If command is not supported, raise a NOT_SUPPORTED_ERR exception."
-		//
-		// We can't throw a real one, but a string will do for our purposes.
-		if (!commands.hasOwnProperty(command)) {
-			throw "NOT_SUPPORTED_ERR";
-		}
-
-		// "If command has no action, raise an INVALID_ACCESS_ERR exception."
-		// "If command has no indeterminacy, raise an INVALID_ACCESS_ERR
-		// exception."
-		// "If command has no state, raise an INVALID_ACCESS_ERR exception."
-		// "If command has no value, raise an INVALID_ACCESS_ERR exception."
-		if (prop != "enabled" && !commands[command].hasOwnProperty(prop)) {
-			throw "INVALID_ACCESS_ERR";
 		}
 
 		executionStackDepth++;
@@ -888,12 +918,9 @@ define(['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Aloha, $_, jQuery
 		// case-insensitively."
 		command = command.toLowerCase();
 
-		// "If command is not supported, raise a NOT_SUPPORTED_ERR exception."
-		//
-		// "If command has no value, raise an INVALID_ACCESS_ERR exception."
 		return editCommandMethod(command, "value", range, function () {
-			// "If command is not enabled, return the empty string."
-			if (!myQueryCommandEnabled(command, range)) {
+			// "If command is not supported or has no value, return the empty string."
+			if (!commands.hasOwnProperty(command) || !commands[command].hasOwnProperty("value")) {
 				return "";
 			}
 
@@ -1158,9 +1185,9 @@ define(['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Aloha, $_, jQuery
 		// https://github.com/alohaeditor/Aloha-Editor/issues/516
 		// look like it works in msie > 7
 		/* if (Aloha.browser.msie && Aloha.browser.version < 8) {
-		br.removeAttribute("style");
-		ref.removeAttribute("style");
-	} */
+		   br.removeAttribute("style");
+		   ref.removeAttribute("style");
+		   } */
 
 		return origHeight == finalHeight;
 	}
@@ -1173,7 +1200,26 @@ define(['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Aloha, $_, jQuery
 	// (0x0009), carriage returns (0x000D), and/or spaces (0x0020), and whose
 	// parent is an Element whose resolved value for "white-space" is "pre-line"."
 	function isWhitespaceNode(node) {
-		return node && node.nodeType == $_.Node.TEXT_NODE && (node.data == "" || (/^[\t\n\r ]+$/.test(node.data) && node.parentNode && node.parentNode.nodeType == $_.Node.ELEMENT_NODE && jQuery.inArray($_.getComputedStyle(node.parentNode).whiteSpace, ["normal", "nowrap"]) != -1) || (/^[\t\r ]+$/.test(node.data) && node.parentNode && node.parentNode.nodeType == $_.Node.ELEMENT_NODE && $_.getComputedStyle(node.parentNode).whiteSpace == "pre-line") || (/^[\t\n\r ]+$/.test(node.data) && node.parentNode && node.parentNode.nodeType == $_.Node.DOCUMENT_FRAGMENT_NODE));
+		var nodeTypes = $_.Node;
+		if (node && node.nodeType === nodeTypes.TEXT_NODE) {
+			var parentNode = node.parentNode;
+
+			var nodeData = node.data;
+			if (jQuery.trim(nodeData).length === 0) {
+				return true;
+			} else if (parentNode && /^[\t\n\r ]+$/.test(nodeData)) {
+				if (parentNode.nodeType === nodeTypes.ELEMENT_NODE) {
+					if (jQuery.inArray($_.getComputedStyle(parentNode).whiteSpace, ["normal", "nowrap"]) !== -1) {
+						return true;
+					} else if ($_.getComputedStyle(parentNode).whiteSpace === "pre-line") {
+						return true;
+					}
+				} else if (parentNode.nodeType === nodeTypes.DOCUMENT_FRAGMENT_NODE) {
+					return true;
+				}
+			}
+		}
+		return false;
 	}
 
 	/**
@@ -1381,6 +1427,105 @@ define(['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Aloha, $_, jQuery
 		return hasCollapsedBlockPropChild;
 	}
 
+	/**
+	 * Checks whether the given node is a visible text node.
+	 *
+	 * @param {HTMLElement} node
+	 * @return {Boolean} True if `node` is a visible text node.
+	 */
+	function isInvisibleTextNode(node) {
+		if (node && node.nodeType !== $_.Node.TEXT_NODE) {
+			return false;
+		}
+		var offset = 0;
+		var data = node.data;
+		var len = data.length;
+		while (offset < len && data.charAt(offset) === '\u200b') {
+			offset++;
+		}
+		return offset === len;
+	}
+
+	/**
+	 * Complement of isInvisibleTextNode().
+	 *
+	 * @param {HTMLElement} node
+	 * @return {Boolean} True if `node` is anything but an invisible text node.
+	 */
+	function isNotInvisibleTextNode(node) {
+		return !isInvisibleTextNode(node);
+	}
+
+	/**
+	 * Checks whether the given node is a otherwise empty block-level element
+	 * containing a propping <br> element.
+	 *
+	 * @param {HTMLElement} node
+	 * @return {Boolean} True if `node` is a propped up block-level element.
+	 */
+	function isProppedBlock(node) {
+		if (!Html.isBlock(node)) {
+			return false;
+		}
+		var child = Html.findNodeRight(node.lastChild, isVisible);
+		return (
+			child
+			&& 'br' === child.nodeName.toLowerCase()
+			&& !Html.findNodeRight(child.previousSibling, isVisible)
+		);
+	}
+
+	/**
+	 * Checks whether the given node is a empty element, or an element that
+	 * would otherwise be empty except for a propping <br>, or an element
+	 * containing only invisible text nodes.
+	 *
+	 * @param {HTMLElement} node
+	 * @return {Boolean} True if `node` can be considered empty.
+	 */
+	function isEmptyNode(node) {
+		return (
+			!node.hasChildNodes()
+			|| isProppedBlock(node)
+			|| !Html.findNodeRight(node.lastChild, isNotInvisibleTextNode)
+		);
+	}
+
+	/**
+	 * Check if the given node is a empty element which is the only
+	 * immediate child of a editing host.
+	 *
+	 * @param {HTMLElement} node
+	 * @return {Boolean} True if `node` can be regarded as empty and the
+	 *                   only immediate child of its parent editing host.
+	 */
+	function isEmptyOnlyChildOfEditingHost(node) {
+		return (
+			node
+				&& isEmptyNode(node)
+					&& isEditingHost(node.parentNode)
+						&& !node.previousSibling
+							&& !node.nextSibling
+		);
+	}
+
+	/**
+	 * Remove the given node and return the position from where it was
+	 * removed.
+	 *
+	 * @param {HTMLElement} node Element to remove from DOM
+	 * @return {object} Object containing node and offset index.
+	 */
+	function removeNode(node) {
+		var ancestor = node.parentNode;
+		var offset = Dom.getIndexInParent(node);
+		ancestor.removeChild(node);
+		return {
+			node: ancestor,
+			offset: offset
+		};
+	}
+
 	// Please note: This method is deprecated and will be removed.
 	// Every command should use the value and range parameter.
 	//
@@ -1427,13 +1572,26 @@ define(['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Aloha, $_, jQuery
 		var valueOverrides = {};
 		var storedRange = null;
 
-		function resetOverrides(range) {
-			if (!storedRange || storedRange.startContainer != range.startContainer || storedRange.endContainer != range.endContainer || storedRange.startOffset != range.startOffset || storedRange.endOffset != range.endOffset) {
-				stateOverrides = {};
-				valueOverrides = {};
-				storedRange = range.cloneRange();
+		resetOverrides = function (range) {
+			if (!storedRange
+				    || storedRange.startContainer != range.startContainer
+				    || storedRange.endContainer != range.endContainer
+				    || storedRange.startOffset != range.startOffset
+				    || storedRange.endOffset != range.endOffset) {
+				storedRange = {
+					startContainer: range.startContainer,
+					endContainer: range.endContainer,
+					startOffset: range.startOffset,
+					endOffset: range.endOffset
+				};
+				if (!Maps.isEmpty(stateOverrides) || !Maps.isEmpty(valueOverrides)) {
+					stateOverrides = {};
+					valueOverrides = {};
+					return true;
+				}
 			}
-		}
+			return false;
+		};
 
 		getStateOverride = function (command, range) {
 			resetOverrides(range);
@@ -1503,7 +1661,7 @@ define(['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Aloha, $_, jQuery
 		// (which may be null) and index, and new parent and new index be the new
 		// parent and index."
 		var oldParent = node.parentNode;
-		var oldIndex = getNodeIndex(node);
+		var oldIndex = Dom.getIndexInParent(node);
 		var i;
 
 		// We only even attempt to preserve the global range object and the ranges
@@ -1786,11 +1944,13 @@ define(['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Aloha, $_, jQuery
 			var startContainer = range.startContainer,
 				startOffset = range.startOffset,
 				endContainer = range.endContainer,
-				endOffset = range.endOffset;
-			if (startContainer == newParent.parentNode && startOffset >= getNodeIndex(newParent)) {
+				endOffset = range.endOffset,
+			    newParentIndex = Dom.getIndexInParent(newParent);
+
+			if (startOffset >= newParentIndex && startContainer == newParent.parentNode) {
 				range.setStart(startContainer, startOffset + 1);
 			}
-			if (endContainer == newParent.parentNode && endOffset >= getNodeIndex(newParent)) {
+			if (endOffset >= newParentIndex && endContainer == newParent.parentNode) {
 				range.setEnd(endContainer, endOffset + 1);
 			}
 
@@ -1800,10 +1960,10 @@ define(['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Aloha, $_, jQuery
 				startOffset = globalRange.startOffset;
 				endContainer = globalRange.endContainer;
 				endOffset = globalRange.endOffset;
-				if (startContainer == newParent.parentNode && startOffset >= getNodeIndex(newParent)) {
+				if (startContainer == newParent.parentNode && startOffset >= newParentIndex) {
 					globalRange.setStart(startContainer, startOffset + 1);
 				}
-				if (endContainer == newParent.parentNode && endOffset >= getNodeIndex(newParent)) {
+				if (endContainer == newParent.parentNode && endOffset >= newParentIndex) {
 					globalRange.setEnd(endContainer, endOffset + 1);
 				}
 			}
@@ -2741,7 +2901,7 @@ define(['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Aloha, $_, jQuery
 		// "While candidate has children, insert the first child of candidate into
 		// candidate's parent immediately before candidate, preserving ranges."
 		while (candidate.hasChildNodes()) {
-			movePreservingRanges(candidate.firstChild, candidate.parentNode, getNodeIndex(candidate), range);
+			movePreservingRanges(candidate.firstChild, candidate.parentNode, Dom.getIndexInParent(candidate), range);
 		}
 
 		// "Insert candidate into node's parent immediately after node."
@@ -2826,7 +2986,7 @@ define(['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Aloha, $_, jQuery
 			// immediately before element, preserving ranges."
 			var i;
 			for (i = 0; i < children.length; i++) {
-				movePreservingRanges(children[i], element.parentNode, getNodeIndex(element), range);
+				movePreservingRanges(children[i], element.parentNode, Dom.getIndexInParent(element), range);
 			}
 
 			// "Remove element from its parent."
@@ -3141,7 +3301,7 @@ define(['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Aloha, $_, jQuery
 		if (node.nodeType == $_.Node.ELEMENT_NODE && !areEquivalentValues(command, getEffectiveCommandValue(node, command), newValue)) {
 			// "Insert node into the parent of new parent before new parent,
 			// preserving ranges."
-			movePreservingRanges(node, newParent.parentNode, getNodeIndex(newParent), range);
+			movePreservingRanges(node, newParent.parentNode, Dom.getIndexInParent(newParent), range);
 
 			// "Remove new parent from its parent."
 			newParent.parentNode.removeChild(newParent);
@@ -3364,7 +3524,7 @@ define(['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Aloha, $_, jQuery
 		// the result, and its start offset to zero."
 		if (isEditable(range.startContainer) && range.startContainer.nodeType == $_.Node.TEXT_NODE && range.startOffset != 0 && range.startOffset != getNodeLength(range.startContainer)) {
 			// Account for browsers not following range mutation rules
-			var newNode = range.startContainer.splitText(range.startOffset);
+			var newNode = splitText(range.startContainer, range.startOffset);
 			var newActiveRange = Aloha.createRange();
 			if (range.startContainer == range.endContainer) {
 				var newEndOffset = range.endOffset - range.startOffset;
@@ -3391,7 +3551,7 @@ define(['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Aloha, $_, jQuery
 			var activeRange = range;
 			var newStart = [activeRange.startContainer, activeRange.startOffset];
 			var newEnd = [activeRange.endContainer, activeRange.endOffset];
-			activeRange.endContainer.splitText(activeRange.endOffset);
+			splitText(activeRange.endContainer, activeRange.endOffset);
 			activeRange.setStart(newStart[0], newStart[1]);
 			activeRange.setEnd(newEnd[0], newEnd[1]);
 
@@ -3554,7 +3714,7 @@ define(['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Aloha, $_, jQuery
 			// "If offset is zero or node has no children, set offset to node's
 			// index, then set node to its parent."
 			if (offset == 0 || !node.hasChildNodes()) {
-				offset = getNodeIndex(node);
+				offset = Dom.getIndexInParent(node);
 				node = node.parentNode;
 
 				// "Otherwise, set node to its child with index offset minus one, then
@@ -3583,7 +3743,7 @@ define(['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Aloha, $_, jQuery
 			// "If offset is node's length or node has no children, set offset to
 			// one plus node's index, then set node to its parent."
 			if (offset == getNodeLength(node) || !node.hasChildNodes()) {
-				offset = 1 + getNodeIndex(node);
+				offset = 1 + Dom.getIndexInParent(node);
 				node = node.parentNode;
 
 				// "Otherwise, set node to its child with index offset and set offset
@@ -3640,7 +3800,7 @@ define(['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Aloha, $_, jQuery
 			// parent of original parent immediately after original parent,
 			// preserving ranges."
 			for (i = nodeList.length - 1; i >= 0; i--) {
-				movePreservingRanges(nodeList[i], originalParent.parentNode, 1 + getNodeIndex(originalParent), range);
+				movePreservingRanges(nodeList[i], originalParent.parentNode, 1 + Dom.getIndexInParent(originalParent), range);
 			}
 
 			// "If precedes line break is true, and the last member of node list
@@ -3682,7 +3842,7 @@ define(['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Aloha, $_, jQuery
 		// "For each node in node list, insert node into the parent of original
 		// parent immediately before original parent, preserving ranges."
 		for (i = 0; i < nodeList.length; i++) {
-			movePreservingRanges(nodeList[i], originalParent.parentNode, getNodeIndex(originalParent), range);
+			movePreservingRanges(nodeList[i], originalParent.parentNode, Dom.getIndexInParent(originalParent), range);
 		}
 
 		// "If follows line break is true, and the first member of node list does
@@ -4011,7 +4171,7 @@ define(['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Aloha, $_, jQuery
 				// into the parent of element immediately before element,
 				// preserving ranges."
 				while (element.hasChildNodes()) {
-					movePreservingRanges(element.firstChild, element.parentNode, getNodeIndex(element), getActiveRange());
+					movePreservingRanges(element.firstChild, element.parentNode, Dom.getIndexInParent(element), getActiveRange());
 				}
 
 				// "Remove element from its parent."
@@ -4027,11 +4187,11 @@ define(['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Aloha, $_, jQuery
 				// Account for browsers not following range mutation rules
 				if (getActiveRange().startContainer == getActiveRange().endContainer) {
 					newEnd = getActiveRange().endOffset - getActiveRange().startOffset;
-					newNode = getActiveRange().startContainer.splitText(getActiveRange().startOffset);
+					newNode = splitText(getActiveRange().startContainer, getActiveRange().startOffset);
 					getActiveRange().setStart(newNode, 0);
 					getActiveRange().setEnd(newNode, newEnd);
 				} else {
-					getActiveRange().setStart(getActiveRange().startContainer.splitText(getActiveRange().startOffset), 0);
+					getActiveRange().setStart(splitText(getActiveRange().startContainer, getActiveRange().startOffset), 0);
 				}
 			}
 
@@ -4048,7 +4208,7 @@ define(['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Aloha, $_, jQuery
 				newStart = [getActiveRange().startContainer, getActiveRange().startOffset];
 				newEnd = [getActiveRange().endContainer, getActiveRange().endOffset];
 				getActiveRange().setEnd(document.documentElement, 0);
-				newEnd[0].splitText(newEnd[1]);
+				splitText(newEnd[0], newEnd[1]);
 				getActiveRange().setStart(newStart[0], newStart[1]);
 				getActiveRange().setEnd(newEnd[0], newEnd[1]);
 			}
@@ -4222,37 +4382,9 @@ define(['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Aloha, $_, jQuery
 	// "An indentation element is either a blockquote, or a div that has a style
 	// attribute that sets "margin" or some subproperty of it."
 	function isIndentationElement(node) {
-		if (!isAnyHtmlElement(node)) {
-			return false;
-		}
-
-		if (node.tagName == "BLOCKQUOTE") {
-			return true;
-		}
-
-		if (node.tagName != "DIV") {
-			return false;
-		}
-
-		if (typeof node.style.length !== 'undefined') {
-			var i;
-			for (i = 0; i < node.style.length; i++) {
-				// Approximate check
-				if (/^(-[a-z]+-)?margin/.test(node.style[i])) {
-					return true;
-				}
-			}
-		} else {
-			var s;
-			/*jslint forin: true*/ //not sure whether node.style.hasOwnProperty is valid
-			for (s in node.style) {
-				if (/^(-[a-z]+-)?margin/.test(s) && node.style[s] && node.style[s] !== 0) {
-					return true;
-				}
-			}
-			/*jslint forin: false*/
-		}
-
+		// Handling of indentation elements while deleting is somehow broken (pressing backspace
+		// in blockquotes wraps the blockquote into a div, ...)
+		// therefore for now, we pretend that indentation elements do not exist at all.
 		return false;
 	}
 
@@ -4340,6 +4472,16 @@ define(['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Aloha, $_, jQuery
 	 */
 	function ensureContainerEditable(container) {
 		if (!container) {
+			return;
+		}
+
+		// Because it is useful to be able to completely empty the contents of
+		// an editing host during editing.  So long as the container's
+		// contenteditable attribute is "true" (as is the case during editing),
+		// the element will be rendered visibly in all browsers.  This fact
+		// allows us to not have to prop up the container with a <br> in order
+		// to keep it accessible to the editor.
+		if (isEditingHost(container)) {
 			return;
 		}
 
@@ -4461,11 +4603,11 @@ define(['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Aloha, $_, jQuery
 				newStartOffset = range.startOffset;
 				newEndOffset = range.endOffset;
 
-				if (range.startContainer === node.parentNode && range.startOffset > getNodeIndex(node)) {
+				if (range.startContainer === node.parentNode && range.startOffset > Dom.getIndexInParent(node)) {
 					// the node (1 element) will be replaced by its contents (contents().length elements)
 					newStartOffset = range.startOffset + (jQuery(node).contents().length - 1);
 				}
-				if (range.endContainer === node.parentNode && range.endOffset > getNodeIndex(node)) {
+				if (range.endContainer === node.parentNode && range.endOffset > Dom.getIndexInParent(node)) {
 					// the node (1 element) will be replaced by its contents (contents().length elements)
 					newEndOffset = range.endOffset + (jQuery(node).contents().length - 1);
 				}
@@ -4487,11 +4629,11 @@ define(['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Aloha, $_, jQuery
 					newStartOffset = range.startOffset;
 					newEndOffset = range.endOffset;
 
-					if (range.startContainer === node.parentNode && range.startOffset > getNodeIndex(node)) {
+					if (range.startContainer === node.parentNode && range.startOffset > Dom.getIndexInParent(node)) {
 						// the node (1 element) will be replaced by its contents (contents().length elements)
 						newStartOffset = range.startOffset + (jQuery(node).contents().length - 1);
 					}
-					if (range.endContainer === node.parentNode && range.endOffset > getNodeIndex(node)) {
+					if (range.endContainer === node.parentNode && range.endOffset > Dom.getIndexInParent(node)) {
 						// the node (1 element) will be replaced by its contents (contents().length elements)
 						newEndOffset = range.endOffset + (jQuery(node).contents().length - 1);
 					}
@@ -4541,7 +4683,7 @@ define(['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Aloha, $_, jQuery
 
 				// "Insert child into the parent of item immediately following
 				// item, preserving ranges."
-				movePreservingRanges(child, item.parentNode, 1 + getNodeIndex(item), range);
+				movePreservingRanges(child, item.parentNode, 1 + Dom.getIndexInParent(item), range);
 
 				// "Otherwise:"
 			} else {
@@ -4599,7 +4741,7 @@ define(['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Aloha, $_, jQuery
 		// li's parent."
 		var liAncestors = $_(getAncestors(startNode).concat(startNode)).filter(function (ancestor) { return isNamedHtmlElement(ancestor, 'li'); }).slice(-1);
 		if (liAncestors.length) {
-			startOffset = getNodeIndex(liAncestors[0]);
+			startOffset = Dom.getIndexInParent(liAncestors[0]);
 			startNode = liAncestors[0].parentNode;
 		}
 
@@ -4610,7 +4752,7 @@ define(['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Aloha, $_, jQuery
 				// "If start offset is zero, set it to start node's index, then set
 				// start node to its parent."
 				if (startOffset == 0) {
-					startOffset = getNodeIndex(startNode);
+					startOffset = Dom.getIndexInParent(startNode);
 					startNode = startNode.parentNode;
 
 					// "Otherwise, subtract one from start offset."
@@ -4626,7 +4768,7 @@ define(['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Aloha, $_, jQuery
 		// "While start offset is zero and start node's parent is not null, set
 		// start offset to start node's index, then set start node to its parent."
 		while (startOffset == 0 && startNode.parentNode) {
-			startOffset = getNodeIndex(startNode);
+			startOffset = Dom.getIndexInParent(startNode);
 			startNode = startNode.parentNode;
 		}
 
@@ -4635,7 +4777,7 @@ define(['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Aloha, $_, jQuery
 		// that li's parent."
 		liAncestors = $_(getAncestors(endNode).concat(endNode)).filter(function (ancestor) { return isNamedHtmlElement(ancestor, 'li'); }).slice(-1);
 		if (liAncestors.length) {
-			endOffset = 1 + getNodeIndex(liAncestors[0]);
+			endOffset = 1 + Dom.getIndexInParent(liAncestors[0]);
 			endNode = liAncestors[0].parentNode;
 		}
 
@@ -4646,7 +4788,7 @@ define(['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Aloha, $_, jQuery
 				// "If end offset is end node's length, set it to one plus end node's
 				// index, then set end node to its parent."
 				if (endOffset == getNodeLength(endNode)) {
-					endOffset = 1 + getNodeIndex(endNode);
+					endOffset = 1 + Dom.getIndexInParent(endNode);
 					endNode = endNode.parentNode;
 
 					// "Otherwise, add one to end offset.
@@ -4663,7 +4805,7 @@ define(['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Aloha, $_, jQuery
 		// null, set end offset to one plus end node's index, then set end node to
 		// its parent."
 		while (endOffset == getNodeLength(endNode) && endNode.parentNode) {
-			endOffset = 1 + getNodeIndex(endNode);
+			endOffset = 1 + Dom.getIndexInParent(endNode);
 			endNode = endNode.parentNode;
 		}
 
@@ -4906,7 +5048,7 @@ define(['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Aloha, $_, jQuery
 				// returns something different from override, call
 				// execCommand(command)."
 				if (typeof override == "boolean" && myQueryCommandState(command, range) != override) {
-					myExecCommand(command);
+					myExecCommand(command, false, override, range);
 
 					// "Otherwise, if override is a string, and command is not
 					// "fontSize", and queryCommandValue(command) returns something not
@@ -5039,7 +5181,7 @@ define(['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Aloha, $_, jQuery
 				// start offset to start node's index, then set start node to its
 				// parent."
 			} else if (startOffset == 0 && !followsLineBreak(startNode) && inSameEditingHost(startNode, startNode.parentNode)) {
-				startOffset = getNodeIndex(startNode);
+				startOffset = Dom.getIndexInParent(startNode);
 				startNode = startNode.parentNode;
 
 				// "Otherwise, if start node is a Text node and its parent's resolved
@@ -5079,7 +5221,7 @@ define(['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Aloha, $_, jQuery
 				// host, set end offset to one plus end node's index, then set end node
 				// to its parent."
 			} else if (endOffset == getNodeLength(endNode) && !precedesLineBreak(endNode) && inSameEditingHost(endNode, endNode.parentNode)) {
-				endOffset = 1 + getNodeIndex(endNode);
+				endOffset = 1 + Dom.getIndexInParent(endNode);
 				endNode = endNode.parentNode;
 
 				// "Otherwise, if end node is a Text node and its parent's resolved
@@ -5130,7 +5272,7 @@ define(['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Aloha, $_, jQuery
 				// start node's length, set start offset to one plus start node's
 				// index, then set start node to its parent."
 			} else if (startNode.nodeType != $_.Node.TEXT_NODE || startOffset == getNodeLength(startNode)) {
-				startOffset = 1 + getNodeIndex(startNode);
+				startOffset = 1 + Dom.getIndexInParent(startNode);
 				startNode = startNode.parentNode;
 
 				// "Otherwise:"
@@ -5215,7 +5357,7 @@ define(['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Aloha, $_, jQuery
 			// start offset to one plus the index of start node, then set start
 			// node to its parent and continue this loop from the beginning."
 			if (startOffset == getNodeLength(startNode) && inSameEditingHost(startNode, startNode.parentNode) && isInlineNode(startNode)) {
-				startOffset = 1 + getNodeIndex(startNode);
+				startOffset = 1 + Dom.getIndexInParent(startNode);
 				startNode = startNode.parentNode;
 				continue;
 			}
@@ -5247,7 +5389,7 @@ define(['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Aloha, $_, jQuery
 			// end node, then set end node to its parent and continue this loop
 			// from the beginning."
 			if (endOffset == 0 && inSameEditingHost(endNode, endNode.parentNode) && isInlineNode(endNode)) {
-				endOffset = getNodeIndex(endNode);
+				endOffset = Dom.getIndexInParent(endNode);
 				endNode = endNode.parentNode;
 				continue;
 			}
@@ -5277,21 +5419,21 @@ define(['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Aloha, $_, jQuery
 		// range's end to its start and abort these steps."
 		if (getPosition(endNode, endOffset, startNode, startOffset) !== "after") {
 			range.setEnd(range.startContainer, range.startOffset);
-			return;
+			return range;
 		}
 
 		// "If start node is a Text node and start offset is 0, set start offset to
 		// the index of start node, then set start node to its parent."
 		// Commented out for unknown reason
 		//if (startNode.nodeType == $_.Node.TEXT_NODE && startOffset == 0 && startNode != endNode) {
-		//		startOffset = getNodeIndex(startNode);
+		//		startOffset = Dom.getIndexInParent(startNode);
 		//		startNode = startNode.parentNode;
 		//}
 
 		// "If end node is a Text node and end offset is its length, set end offset
 		// to one plus the index of end node, then set end node to its parent."
 		if (endNode.nodeType == $_.Node.TEXT_NODE && endOffset == getNodeLength(endNode) && startNode != endNode) {
-			endOffset = 1 + getNodeIndex(endNode);
+			endOffset = 1 + Dom.getIndexInParent(endNode);
 			endNode = endNode.parentNode;
 		}
 
@@ -5368,12 +5510,11 @@ define(['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Aloha, $_, jQuery
 			// and append the result as the last child of parent."
 			// only do this, if the offsetHeight is 0
 			if ((isEditable(parent_) || isEditingHost(parent_)) && !isInlineNode(parent_)) {
-				// TODO is this always correct?
 				ensureContainerEditable(parent_);
 			}
 
 			// "Abort these steps."
-			return;
+			return range;
 		}
 
 		// "If start node is an editable Text node, call deleteData() on it, with
@@ -5438,6 +5579,9 @@ define(['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Aloha, $_, jQuery
 		// "Canonicalize whitespace at range's end."
 		canonicalizeWhitespace(range.endContainer, range.endOffset);
 
+		// A reference to the position where a node is removed.
+		var pos;
+
 		// "If block merging is false, or start block or end block is null, or
 		// start block is not in the same editing host as end block, or start block
 		// and end block are the same:"
@@ -5445,11 +5589,22 @@ define(['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Aloha, $_, jQuery
 			// "Set range's end to its start."
 			range.setEnd(range.startContainer, range.startOffset);
 
+			// Calling delete on the give markup:
+			// <editable><block><br>[]</block></editable>
+			// should result in:
+			// <editable>[]</editable>
+			var block = startBlock || endBlock;
+			if (isEmptyOnlyChildOfEditingHost(block)) {
+				pos = removeNode(block);
+				range.setStart(pos.node, pos.offset);
+				range.setEnd(pos.node, pos.offset);
+			}
+
 			// "Restore states and values from overrides."
 			restoreStatesAndValues(overrides, range);
 
 			// "Abort these steps."
-			return;
+			return range;
 		}
 
 		// "If start block has one child, which is a collapsed block prop, remove
@@ -5478,8 +5633,8 @@ define(['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Aloha, $_, jQuery
 
 			// "Set the start and end of range to (start block, index of reference
 			// node)."
-			range.setStart(startBlock, getNodeIndex(referenceNode));
-			range.setEnd(startBlock, getNodeIndex(referenceNode));
+			range.setStart(startBlock, Dom.getIndexInParent(referenceNode));
+			range.setEnd(startBlock, Dom.getIndexInParent(referenceNode));
 
 			// "If end block has no children:"
 			if (!endBlock.hasChildNodes()) {
@@ -5511,14 +5666,14 @@ define(['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Aloha, $_, jQuery
 				restoreStatesAndValues(overrides, range);
 
 				// "Abort these steps."
-				return;
+				return range;
 			}
 
 			// "If end block's firstChild is not an inline node, restore states and
 			// values from overrides, then abort these steps."
 			if (!isInlineNode(endBlock.firstChild)) {
 				restoreStatesAndValues(overrides, range);
-				return;
+				return range;
 			}
 
 			// "Let children be a list of nodes, initially empty."
@@ -5638,12 +5793,39 @@ define(['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Aloha, $_, jQuery
 		// "Restore the values from values."
 		restoreValues(values, range);
 
+		// Because otherwise calling deleteContents() with the given selection:
+		//
+		// <editable><block>[foo</block><block>bar]</block></editable>
+		//
+		// would result in:
+		//
+		// <editable><block>[]<br /></block></editable>
+		//
+		// instead of:
+		//
+		// <editable>[]</editable>
+		//
+		// Therefore, the below makes it possible to completely empty contents
+		// of editing hosts via operations like CTRL+A, DEL.
+		//
+		// If startBlock is empty, and startBlock is the immediate and only
+		// child of its parent editing host, then remove startBlock and collapse
+		// the selection at the beginning of the editing post.
+		if (isEmptyOnlyChildOfEditingHost(startBlock)) {
+			pos = removeNode(startBlock);
+			range.setStart(pos.node, pos.offset);
+			range.setEnd(pos.node, pos.offset);
+			startBlock = pos.node;
+		}
+
 		// "If start block has no children, call createElement("br") on the context
 		// object and append the result as the last child of start block."
 		ensureContainerEditable(startBlock);
 
 		// "Restore states and values from overrides."
 		restoreStatesAndValues(overrides, range);
+
+		return range;
 	}
 
 	// "To remove a node node while preserving its descendants, split the parent of
@@ -5667,7 +5849,7 @@ define(['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Aloha, $_, jQuery
 			jQuery(node).find('ul,ol,li').each(function () {
 				jQuery(this).contents().each(function () {
 					if (isWhitespaceNode(this)) {
-						var index = getNodeIndex(this);
+						var index = Dom.getIndexInParent(this);
 
 						// if the range points to somewhere behind the removed text node, we reduce the offset
 						if (range.startContainer === this.parentNode && range.startOffset > index) {
@@ -5885,8 +6067,8 @@ define(['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Aloha, $_, jQuery
 
 			// "Let preceding siblings be the preceding siblings of target, and let
 			// following siblings be the following siblings of target."
-			var precedingSiblings = [].slice.call(toArray(currentAncestor.childNodes), 0, getNodeIndex(target));
-			var followingSiblings = [].slice.call(toArray(currentAncestor.childNodes), 1 + getNodeIndex(target));
+			var precedingSiblings = [].slice.call(toArray(currentAncestor.childNodes), 0, Dom.getIndexInParent(target));
+			var followingSiblings = [].slice.call(toArray(currentAncestor.childNodes), 1 + Dom.getIndexInParent(target));
 
 			// "Indent preceding siblings."
 			indentNodes(precedingSiblings, range);
@@ -6431,7 +6613,7 @@ define(['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Aloha, $_, jQuery
 				// node is an invisible node, set offset to the index of node, then
 				// set node to its parent."
 				if ((offset == 0 && isInlineNode(node)) || isInvisible(node)) {
-					offset = getNodeIndex(node);
+					offset = Dom.getIndexInParent(node);
 					node = node.parentNode;
 					continue;
 				}
@@ -6564,7 +6746,7 @@ define(['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Aloha, $_, jQuery
 				// "If start offset is zero, set start offset to the index of start
 				// node and then set start node to its parent."
 				if (startOffset == 0) {
-					startOffset = getNodeIndex(startNode);
+					startOffset = Dom.getIndexInParent(startNode);
 					startNode = startNode.parentNode;
 
 					// "Otherwise, if start node has an editable invisible child with
@@ -6713,12 +6895,14 @@ define(['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Aloha, $_, jQuery
 			deleteContents(delRange);
 
 			if (!isAncestorContainer(document.body, range.startContainer)) {
-				if (delRange.startContainer.hasChildNodes() || delRange.startContainer.nodeType == $_.Node.TEXT_NODE) {
+				if (delRange.startContainer.hasChildNodes()
+						|| delRange.startContainer.nodeType == $_.Node.TEXT_NODE
+							|| isEditingHost(delRange.startContainer)) {
 					range.setStart(delRange.startContainer, delRange.startOffset);
 					range.setEnd(delRange.startContainer, delRange.startOffset);
 				} else {
-					range.setStart(delRange.startContainer.parentNode, getNodeIndex(delRange.startContainer));
-					range.setEnd(delRange.startContainer.parentNode, getNodeIndex(delRange.startContainer));
+					range.setStart(delRange.startContainer.parentNode, Dom.getIndexInParent(delRange.startContainer));
+					range.setEnd(delRange.startContainer.parentNode, Dom.getIndexInParent(delRange.startContainer));
 				}
 			}
 		}
@@ -7017,7 +7201,7 @@ define(['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Aloha, $_, jQuery
 					// inline node, or if node is invisible, set offset to one plus the
 					// index of node, then set node to its parent."
 				} else if ((offset == getNodeLength(node) && isInlineNode(node)) || isInvisible(node)) {
-					offset = 1 + getNodeIndex(node);
+					offset = 1 + Dom.getIndexInParent(node);
 					node = node.parentNode;
 
 					// "Otherwise, if node has a child with index offset and that child
@@ -7098,7 +7282,7 @@ define(['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Aloha, $_, jQuery
 				// "If end offset is the length of end node, set end offset to one
 				// plus the index of end node and then set end node to its parent."
 				if (endOffset == getNodeLength(endNode)) {
-					endOffset = 1 + getNodeIndex(endNode);
+					endOffset = 1 + Dom.getIndexInParent(endNode);
 					endNode = endNode.parentNode;
 
 					// "Otherwise, if end node has a an editable invisible child with
@@ -7164,7 +7348,9 @@ define(['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Aloha, $_, jQuery
 
 			// "Delete the contents of the range with start (node, offset) and end
 			// (end node, end offset)."
-			deleteContents(node, offset, endNode, endOffset);
+			var newRange = deleteContents(node, offset, endNode, endOffset);
+			range.setStart(newRange.startContainer, newRange.startOffset);
+			range.setEnd(newRange.endContainer, newRange.endOffset);
 		}
 	};
 
@@ -7252,14 +7438,14 @@ define(['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Aloha, $_, jQuery
 			// null, set range's start to (parent of start node, index of start
 			// node)."
 			while (range.startOffset == 0 && range.startContainer.parentNode) {
-				range.setStart(range.startContainer.parentNode, getNodeIndex(range.startContainer));
+				range.setStart(range.startContainer.parentNode, Dom.getIndexInParent(range.startContainer));
 			}
 
 			// "While range's end offset is the length of its end node, and its end
 			// node's parent is not null, set range's end to (parent of end node, 1
 			// + index of start node)."
 			while (range.endOffset == getNodeLength(range.endContainer) && range.endContainer.parentNode) {
-				range.setEnd(range.endContainer.parentNode, 1 + getNodeIndex(range.endContainer));
+				range.setEnd(range.endContainer.parentNode, 1 + Dom.getIndexInParent(range.endContainer));
 			}
 
 			// "Delete the contents of range, with block merging false."
@@ -7277,7 +7463,7 @@ define(['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Aloha, $_, jQuery
 			// offset is zero, set the active range's start and end to (parent of
 			// start node, index of start node)."
 			if (getActiveRange().startContainer.nodeType == $_.Node.TEXT_NODE && getActiveRange().startOffset == 0) {
-				getActiveRange().setStart(getActiveRange().startContainer.parentNode, getNodeIndex(getActiveRange().startContainer));
+				getActiveRange().setStart(getActiveRange().startContainer.parentNode, Dom.getIndexInParent(getActiveRange().startContainer));
 				getActiveRange().collapse(true);
 			}
 
@@ -7285,7 +7471,7 @@ define(['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Aloha, $_, jQuery
 			// offset is the length of its start node, set the active range's start
 			// and end to (parent of start node, 1 + index of start node)."
 			if (getActiveRange().startContainer.nodeType == $_.Node.TEXT_NODE && getActiveRange().startOffset == getNodeLength(getActiveRange().startContainer)) {
-				getActiveRange().setStart(getActiveRange().startContainer.parentNode, 1 + getNodeIndex(getActiveRange().startContainer));
+				getActiveRange().setStart(getActiveRange().startContainer.parentNode, 1 + Dom.getIndexInParent(getActiveRange().startContainer));
 				getActiveRange().collapse(true);
 			}
 
@@ -7306,8 +7492,8 @@ define(['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Aloha, $_, jQuery
 			// Not everyone actually supports collapse(), so we do it manually
 			// instead.  Also, we need to modify the actual range we're given as
 			// well, for the sake of autoimplementation.html's range-filling-in.
-			range.setStart(hr.parentNode, 1 + getNodeIndex(hr));
-			range.setEnd(hr.parentNode, 1 + getNodeIndex(hr));
+			range.setStart(hr.parentNode, 1 + Dom.getIndexInParent(hr));
+			range.setEnd(hr.parentNode, 1 + Dom.getIndexInParent(hr));
 			Aloha.getSelection().removeAllRanges();
 			Aloha.getSelection().addRange(range);
 		}
@@ -7353,7 +7539,7 @@ define(['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Aloha, $_, jQuery
 				// "For each node in collapsed block props, remove node from its
 				// parent."
 				$_(range.startContainer.childNodes).filter(function (node, range) {
-					return isEditable(node) && isCollapsedBlockProp(node) && getNodeIndex(node) >= range.startOffset;
+					return isEditable(node) && isCollapsedBlockProp(node) && Dom.getIndexInParent(node) >= range.startOffset;
 				}, true).forEach(function (node) {
 					node.parentNode.removeChild(node);
 				});
@@ -7372,8 +7558,8 @@ define(['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Aloha, $_, jQuery
 			// "Call collapse() on the context object's Selection, with last
 			// child's parent as the first argument and one plus its index as the
 			// second."
-			range.setStart(lastChild.parentNode, 1 + getNodeIndex(lastChild));
-			range.setEnd(lastChild.parentNode, 1 + getNodeIndex(lastChild));
+			range.setStart(lastChild.parentNode, 1 + Dom.getIndexInParent(lastChild));
+			range.setEnd(lastChild.parentNode, 1 + Dom.getIndexInParent(lastChild));
 
 			// "Fix disallowed ancestors of each member of descendants."
 			var i;
@@ -7432,8 +7618,8 @@ define(['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Aloha, $_, jQuery
 			// Not everyone actually supports collapse(), so we do it manually
 			// instead.  Also, we need to modify the actual range we're given as
 			// well, for the sake of autoimplementation.html's range-filling-in.
-			range.setStart(img.parentNode, 1 + getNodeIndex(img));
-			range.setEnd(img.parentNode, 1 + getNodeIndex(img));
+			range.setStart(img.parentNode, 1 + Dom.getIndexInParent(img));
+			range.setEnd(img.parentNode, 1 + Dom.getIndexInParent(img));
 			Aloha.getSelection().removeAllRanges();
 			Aloha.getSelection().addRange(range);
 
@@ -7480,7 +7666,7 @@ define(['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Aloha, $_, jQuery
 			var newNode, newOffset;
 			if (range.startContainer.nodeType == $_.Node.TEXT_NODE && range.startOffset == 0) {
 				newNode = range.startContainer.parentNode;
-				newOffset = getNodeIndex(range.startContainer);
+				newOffset = Dom.getIndexInParent(range.startContainer);
 				Aloha.getSelection().collapse(newNode, newOffset);
 				range.setStart(newNode, newOffset);
 				range.setEnd(newNode, newOffset);
@@ -7493,7 +7679,7 @@ define(['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Aloha, $_, jQuery
 			// the active range's start node's index."
 			if (range.startContainer.nodeType == $_.Node.TEXT_NODE && range.startOffset == getNodeLength(range.startContainer)) {
 				newNode = range.startContainer.parentNode;
-				newOffset = 1 + getNodeIndex(range.startContainer);
+				newOffset = 1 + Dom.getIndexInParent(range.startContainer);
 				Aloha.getSelection().collapse(newNode, newOffset);
 				range.setStart(newNode, newOffset);
 				range.setEnd(newNode, newOffset);
@@ -7509,9 +7695,9 @@ define(['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Aloha, $_, jQuery
 			// "Call collapse() on the context object's Selection, with br's parent
 			// as the first argument and one plus br's index as the second
 			// argument."
-			Aloha.getSelection().collapse(br.parentNode, 1 + getNodeIndex(br));
-			range.setStart(br.parentNode, 1 + getNodeIndex(br));
-			range.setEnd(br.parentNode, 1 + getNodeIndex(br));
+			Aloha.getSelection().collapse(br.parentNode, 1 + Dom.getIndexInParent(br));
+			range.setStart(br.parentNode, 1 + Dom.getIndexInParent(br));
+			range.setEnd(br.parentNode, 1 + Dom.getIndexInParent(br));
 
 			// "If br is a collapsed line break, call createElement("br") on the
 			// context object and let extra br be the result, then call
@@ -7521,9 +7707,9 @@ define(['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Aloha, $_, jQuery
 				range.insertNode(createEndBreak());
 
 				// Compensate for nonstandard implementations of insertNode
-				Aloha.getSelection().collapse(br.parentNode, 1 + getNodeIndex(br));
-				range.setStart(br.parentNode, 1 + getNodeIndex(br));
-				range.setEnd(br.parentNode, 1 + getNodeIndex(br));
+				Aloha.getSelection().collapse(br.parentNode, 1 + Dom.getIndexInParent(br));
+				range.setStart(br.parentNode, 1 + Dom.getIndexInParent(br));
+				range.setEnd(br.parentNode, 1 + Dom.getIndexInParent(br));
 			}
 
 			// IE7 is adding this styles: height: auto; min-height: 0px; max-height: none;
@@ -7586,20 +7772,20 @@ define(['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Aloha, $_, jQuery
 			// "If node is a Text node, and offset is neither 0 nor the length of
 			// node, call splitText(offset) on node."
 			if (node.nodeType == $_.Node.TEXT_NODE && offset != 0 && offset != getNodeLength(node)) {
-				node.splitText(offset);
+				splitText(node, offset);
 			}
 
 			// "If node is a Text node and offset is its length, set offset to one
 			// plus the index of node, then set node to its parent."
 			if (node.nodeType == $_.Node.TEXT_NODE && offset == getNodeLength(node)) {
-				offset = 1 + getNodeIndex(node);
+				offset = 1 + Dom.getIndexInParent(node);
 				node = node.parentNode;
 			}
 
 			// "If node is a Text or Comment node, set offset to the index of node,
 			// then set node to its parent."
 			if (node.nodeType == $_.Node.TEXT_NODE || node.nodeType == $_.Node.COMMENT_NODE) {
-				offset = getNodeIndex(node);
+				offset = Dom.getIndexInParent(node);
 				node = node.parentNode;
 			}
 
@@ -7689,6 +7875,12 @@ define(['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Aloha, $_, jQuery
 				);
 			}
 
+			// If no container has been set yet, it is not possible to insert a paragraph at this position;
+			// the following steps are skipped in order to prevent critical errors from occurring;
+			if (!container) {
+				return;
+			}
+
 			// "If container's local name is "address", "listing", or "pre":"
 			var oldHeight, newHeight;
 			if (container.tagName == "ADDRESS" || container.tagName == "LISTING" || container.tagName == "PRE") {
@@ -7773,6 +7965,17 @@ define(['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Aloha, $_, jQuery
 				return;
 			}
 
+			// special behaviour when pressing enter in the last empty paragraph, that is nested in a blockquote
+			if (isNamedHtmlElement(container, "p")
+					&& isNamedHtmlElement(container.parentNode, "blockquote")
+						&& !container.nextSibling
+							&& (!container.hasChildNodes()
+									|| (container.childNodes.length === 1
+											&& isNamedHtmlElement(container.firstChild, "br")))) {
+				jQuery(container.parentNode).after(container);
+				return;
+			}
+
 			// "Let new line range be a new range whose start is the same as
 			// the active range's, and whose end is (container, length of
 			// container)."
@@ -7784,14 +7987,14 @@ define(['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Aloha, $_, jQuery
 			// not container, set its start to (parent of start node, index of
 			// start node)."
 			while (newLineRange.startOffset == 0 && newLineRange.startContainer != container) {
-				newLineRange.setStart(newLineRange.startContainer.parentNode, getNodeIndex(newLineRange.startContainer));
+				newLineRange.setStart(newLineRange.startContainer.parentNode, Dom.getIndexInParent(newLineRange.startContainer));
 			}
 
 			// "While new line range's start offset is the length of its start node
 			// and its start node is not container, set its start to (parent of
 			// start node, 1 + index of start node)."
 			while (newLineRange.startOffset == getNodeLength(newLineRange.startContainer) && newLineRange.startContainer != container) {
-				newLineRange.setStart(newLineRange.startContainer.parentNode, 1 + getNodeIndex(newLineRange.startContainer));
+				newLineRange.setStart(newLineRange.startContainer.parentNode, 1 + Dom.getIndexInParent(newLineRange.startContainer));
 			}
 
 			// "Let end of line be true if new line range contains either nothing
@@ -8009,7 +8212,7 @@ define(['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Aloha, $_, jQuery
 			}
 
 			// "Restore states and values from overrides."
-			restoreStatesAndValues(overrides);
+			restoreStatesAndValues(overrides, range);
 
 			// "Canonicalize whitespace at the active range's start."
 			canonicalizeWhitespace(range.startContainer, range.startOffset);
@@ -8484,7 +8687,11 @@ define(['aloha/core', 'aloha/ecma5shims', 'jquery'], function (Aloha, $_, jQuery
 		isEndBreak: isEndBreak,
 		ensureContainerEditable: ensureContainerEditable,
 		isEditingHost: isEditingHost,
-		isEditable: isEditable
+		isEditable: isEditable,
+		getStateOverride: getStateOverride,
+		setStateOverride: setStateOverride,
+		resetOverrides: resetOverrides,
+		unsetStateOverride: unsetStateOverride
 	};
 }); // end define
 // vim: foldmarker=@{,@} foldmethod=marker

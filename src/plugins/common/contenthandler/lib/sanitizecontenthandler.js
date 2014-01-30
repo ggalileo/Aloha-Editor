@@ -32,81 +32,82 @@ define([
 	'aloha/console',
 	'vendor/sanitize'
 ], function(Aloha, jQuery, ContentHandlerManager, Plugin, console) {
-	"use strict";
+    "use strict";
 
-	var sanitize;
+    var sanitize;
 
-	// predefined set of sanitize options if no dynamic or custom config is used
-	if( !Aloha.defaults.sanitize ) {
-		Aloha.defaults.sanitize = {}
-	}
+    // predefined set of sanitize options if no dynamic or custom config is used
+    if( !Aloha.defaults.sanitize ) {
+        Aloha.defaults.sanitize = {}
+    }
 
-	// very restricted sanitize config
-	Aloha.defaults.sanitize.restricted = {
-		elements: [ 'b', 'em', 'i', 'strong', 'u', 'del', 'p', 'span', 'div', 'br' ]
-	}
+    // very restricted sanitize config
+    Aloha.defaults.sanitize.restricted = {
+        elements: [ 'b', 'em', 'i', 'strong', 'u', 'del', 'p', 'span', 'div', 'br' ]
+    }
 
-	// sanitize  config allowing a bit more (no tables)
-	Aloha.defaults.sanitize.basic = {
-		elements: [
-			'a', 'abbr', 'b', 'blockquote', 'br', 'cite', 'code', 'dd', 'del', 'dl', 'dt', 'em',
-			'i', 'li', 'ol', 'p', 'pre', 'q', 'small', 'strike', 'strong', 'sub',
-			'sup', 'u', 'ul' ],
+    // sanitize  config allowing a bit more (no tables)
+    Aloha.defaults.sanitize.basic = {
+        elements: [
+          'a', 'abbr', 'b', 'blockquote', 'br', 'cite', 'code', 'dd', 'del', 'dl', 'dt', 'em',
+          'i', 'li', 'ol', 'p', 'pre', 'q', 'small', 'strike', 'strong', 'sub',
+          'sup', 'u', 'ul' ],
 
-		attributes: {
-			'a' : ['href'],
-			'blockquote' : ['cite'],
-			'q' : ['cite'],
-			'abbr': ['title']
-		},
+        attributes: {
+          'a' : ['href'],
+          'blockquote' : ['cite'],
+          'q' : ['cite'],
+          'abbr': ['title']
+        },
 
-		//add_attributes: {
-			//  'a': {'rel': 'nofollow'}
-		//},
+        //add_attributes: {
+          //  'a': {'rel': 'nofollow'}
+        //},
 
-		protocols: {
-			'a' : {'href': ['ftp', 'http', 'https', 'mailto', '__relative__']},
-			'blockquote' : {'cite': ['http', 'https', '__relative__']},
-			'q' : {'cite': ['http', 'https', '__relative__']}
-		}
-	}
+        protocols: {
+          'a' : {'href': ['ftp', 'http', 'https', 'mailto', '__relative__']},
+          'blockquote' : {'cite': ['http', 'https', '__relative__']},
+          'q' : {'cite': ['http', 'https', '__relative__']}
+        }
+    }
 
-	// relaxed sanitize config allows also tables
-	Aloha.defaults.sanitize.relaxed = {
-		elements: [
-			'a', 'abbr', 'b', 'blockquote', 'br', 'caption', 'cite', 'code', 'col',
-			'colgroup', 'dd', 'del', 'dl', 'dt', 'em', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
-			'i', 'img', 'li', 'ol', 'p', 'pre', 'q', 'small', 'strike', 'strong',
-			'sub', 'sup', 'table', 'tbody', 'td', 'tfoot', 'th', 'thead', 'tr', 'u',
-			'ul', 'span', 'hr', 'object', 'div'
-		],
+    // relaxed sanitize config allows also tables
+    Aloha.defaults.sanitize.relaxed = {
+        elements: [
+          'a', 'abbr', 'b', 'blockquote', 'br', 'caption', 'cite', 'code', 'col',
+          'colgroup', 'dd', 'del', 'dl', 'dt', 'em', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+          'i', 'img', 'li', 'ol', 'p', 'pre', 'q', 'small', 'strike', 'strong',
+          'sub', 'sup', 'table', 'tbody', 'td', 'tfoot', 'th', 'thead', 'tr', 'u',
+          'ul', 'span', 'hr', 'object', 'div'
+        ],
 
-		attributes: {
-			'a': ['href', 'title', 'id', 'class', 'target', 'data-gentics-aloha-repository', 'data-gentics-aloha-object-id'],
-			'div': ['id','class','style'],
-			'abbr': ['title'],
-			'blockquote': ['cite'],
-			'br': ['class'],
-			'col': ['span', 'width'],
-			'colgroup': ['span', 'width'],
-			'img': ['align', 'alt', 'height', 'src', 'title', 'width', 'class', 'data-caption', 'data-align', 'data-width', 'data-original-image'],
-			'ol': ['start', 'type'],
-			'p': ['class', 'style', 'id'],
-			'q': ['cite'],
-			'table': ['summary', 'width'],
-			'td': ['abbr', 'axis', 'colspan', 'rowspan', 'width'],
-			'th': ['abbr', 'axis', 'colspan', 'rowspan', 'scope', 'width'],
-			'ul': ['type'],
-			'span': ['class','style','lang','xml:lang','role']
-		},
+        attributes: {
+          'a': ['href', 'title', 'id', 'class', 'target', 'data-gentics-aloha-repository', 'data-gentics-aloha-object-id'],
+          'div': ['id','class','style'],
+          'abbr': ['title'],
+          'blockquote': ['cite'],
+          'br': ['class'],
+          'col': ['span', 'width'],
+          'colgroup': ['span', 'width'],
+          'img': ['align', 'alt', 'height', 'src', 'title', 'width', 'class', 'data-caption', 'data-align', 'data-width', 'data-original-image'],
+          'ol': ['start', 'type'],
+          'p': ['class', 'style', 'id'],
+          'q': ['cite'],
+          'table': ['summary', 'width'],
+                      // For IE7 it matters the uppercase 'S' in rowSpan, colSpan
+          'td': ['abbr', 'axis', 'colSpan', 'rowSpan', 'colspan', 'rowspan', 'width'],
+          'th': ['abbr', 'axis', 'colSpan', 'rowSpan', 'colspan', 'rowspan', 'scope', 'width'],
+          'ul': ['type'],
+          'span': ['class','style','lang','xml:lang','role']
+        },
 
-		protocols: {
-			'a': {'href': ['ftp', 'http', 'https', 'mailto', '__relative__']},
-			'blockquote': {'cite': ['http', 'https', '__relative__']},
-			'img': {'src' : ['http', 'https', '__relative__']},
-			'q': {'cite': ['http', 'https', '__relative__']}
-		}
-	}
+        protocols: {
+          'a': {'href': ['ftp', 'http', 'https', 'mailto', '__relative__']},
+          'blockquote': {'cite': ['http', 'https', '__relative__']},
+          'img': {'src' : ['http', 'https', '__relative__']},
+          'q': {'cite': ['http', 'https', '__relative__']}
+        }
+    }
 
     var sanitizers = (function() {
         var idOrClassRegExp = /^[\.#]/;
@@ -202,23 +203,27 @@ define([
         };
     })();
 
-	var SanitizeContentHandler = ContentHandlerManager.createHandler({
-		/**
-		 * Handle the content from eg. paste action and sanitize the html
-		 * @param content
-		 */
-		handleContent: function( content )  {
+	  var SanitizeContentHandler = ContentHandlerManager.createHandler({
+        /**
+         * Handle the content from eg. paste action and sanitize the html
+         * @param content
+         */
+        handleContent: function(content, options, editable) {
+            if (!editable) {
+                return content;
+            }
+
             sanitizers.init();
 
-			if ( typeof content === 'string' ){
-				content = jQuery( '<div>' + content + '</div>' ).get(0);
-			} else if ( content instanceof jQuery ) {
-				content = jQuery( '<div>' ).append(content).get(0);
-			}
+            if ( typeof content === 'string' ){
+                content = jQuery( '<div>' + content + '</div>' ).get(0);
+            } else if ( content instanceof jQuery ) {
+                content = jQuery( '<div>' ).append(content).get(0);
+            }
 
-			return jQuery('<div>').append(sanitizers.instanceForEditable().clean_node(content)).html();
-		}
-	});
+            return jQuery('<div>').append(sanitizers.instanceForEditable().clean_node(content)).html();
+        }
+    });
 
-	return SanitizeContentHandler;
+	  return SanitizeContentHandler;
 });

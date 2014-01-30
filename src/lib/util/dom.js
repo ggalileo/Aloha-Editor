@@ -1,9 +1,9 @@
 /* dom.js is part of Aloha Editor project http://aloha-editor.org
  *
- * Aloha Editor is a WYSIWYG HTML5 inline editing library and editor. 
+ * Aloha Editor is a WYSIWYG HTML5 inline editing library and editor.
  * Copyright (c) 2010-2012 Gentics Software GmbH, Vienna, Austria.
- * Contributors http://aloha-editor.org/contribution.php 
- * 
+ * Contributors http://aloha-editor.org/contribution.php
+ *
  * Aloha Editor is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
  * as published by the Free Software Foundation; either version 2
@@ -17,13 +17,14 @@
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- * 
+ *
  * As an additional permission to the GNU GPL version 2, you may distribute
  * non-source (e.g., minimized or compacted) forms of the Aloha-Editor
  * source code without the copy of the GNU GPL normally required,
  * provided you include this license notice and a URL through which
  * recipients can access the Corresponding Source.
  */
+/*jslint eqeq: true */
 // Ensure GENTICS Namespace
 window.GENTICS = window.GENTICS || {};
 window.GENTICS.Utils = window.GENTICS.Utils || {};
@@ -72,11 +73,190 @@ define(['jquery', 'util/class', 'aloha/ecma5shims'], function (jQuery, Class, $_
 		};
 
 	/**
+	 * Can't use elem.childNodes.length because
+	 * http://www.quirksmode.org/dom/w3c_core.html
+	 * "IE up to 8 does not count empty text nodes."
+	 *
+	 * Taken from Dom2.js
+	 */
+	function numChildren(elem) {
+		var count = 0;
+		var child = elem.firstChild;
+		while (child) {
+			count += 1;
+			child = child.nextSibling;
+		}
+		return count;
+	}
+
+	/**
+	 * Gets the index of the given node within its parent element.
+	 * @param {Element} node
+	 * @return {number}
+	 *         Index in the parent node or -1 if no node given or node has no
+	 *         parent.
+	 */
+	function getIndexInParent(node) {
+		if (!node) {
+			return -1;
+		}
+
+		var i,
+		    childNodes = node.parentNode.childNodes,
+			len = childNodes.length;
+		for (i = 0; i < len; i++) {
+			if (childNodes[i] === node) {
+				return i;
+			}
+		}
+
+		return -1;
+	}
+
+	/**
+	 * Taken from Dom2.js
+	 */
+	function nodeLength(node) {
+		if (1 === node.nodeType) {
+			return numChildren(node);
+		}
+		if (3 === node.nodeType) {
+			return node.length;
+		}
+		return 0;
+	}
+
+	/**
+	 * Checks if the element given is an aloha-editing-p helper, added by split.
+	 *
+	 * @param {HTMLElement} node
+	 * @return {Boolean} True if the given element is an
+	 *                   aloha-editing-paragraph.
+	 */
+	function isAlohaEditingP(node) {
+		return (
+			node.className === 'aloha-editing-p'
+				&& nodeLength(node) === 1
+					&& node.children[0].nodeName === 'BR'
+						&& node.children[0].className === 'aloha-end-br'
+		);
+	}
+
+	/**
+	 * Starting from the given node, will walk forward (right-ward) through the
+	 * node until an element is found that matches the predicate `match` or we
+	 * reach the last element in the tree inside the editing host.
+	 *
+	 * @param {HTMLElement} node An element that must be inside an editable.
+	 * @param {function(HTMLElement):Boolean} match A prediate function to
+	 *                                              determine wether or not the
+	 *                                              node matches one we are
+	 *                                              looking for.
+	 * @return {HTMLElement} The matched node that is forward in the DOM tree
+	 *                       from `node`; null if nothing can be found that
+	 *                       matches `match`.
+	 */
+	function findNodeForward(node, match) {
+		if (!node) {
+			return null;
+		}
+		if (match(node)) {
+			return node;
+		}
+		var next = node.firstChild
+		        || node.nextSibling
+		        || (
+		            node.parentNode
+		            && !GENTICS.Utils.Dom.isEditingHost(node.parentNode)
+		            && node.parentNode.nextSibling
+		        );
+		return next ? findNodeForward(next, match) : null;
+	}
+
+	function isVisiblyEmpty(node) {
+		if (!node) {
+			return true;
+		}
+		// TODO: use isChildlessElement()
+		if ('BR' === node.nodeName) {
+			return false;
+		}
+		if (node.nodeType === Node.TEXT_NODE) {
+			// TODO: would prefer to use
+			// (Html.isWhitespaces(node) || Html.isZeroWidthCharacters(node))
+			// but cannot because of circular dependency
+			if (node.data.search(/\S/) === -1) {
+				return true;
+			}
+			// Fix for IE with zero-width characters
+			if (1 === node.data.length && node.data.charCodeAt(0) >= 0x2000) {
+				return true;
+			}
+			return false;
+		}
+		var numChildren = nodeLength(node);
+		if (0 === numChildren) {
+			return true;
+		}
+		var children = node.childNodes;
+		var i;
+		for (i = 0; i < numChildren; i++) {
+			if (!isVisiblyEmpty(children[i])) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	/**
+	 * Checks for the opposite condition of isVisiblyEmpty().
+	 *
+	 * @param {HTMLElement} node
+	 * @return {Boolean} True if the given node is visible not empty.
+	 */
+	function isNotVisiblyEmpty(node) {
+		return !isVisiblyEmpty(node);
+	}
+
+	/**
+	 * Checks whether the given element is a "phantom" element-- ie: an element
+	 * that is either invisible or an aloha-editing-paragraph element.
+	 *
+	 * @param {HTMLElement} node
+	 * @return {Boolean} True if the element is a "phantom" element.
+	 */
+	function isPhantomNode(node) {
+		return isVisiblyEmpty(node) || isAlohaEditingP(node);
+	}
+
+	/**
+	 * Inserts the DOM node `element` appropriately during a split operation.
+	 *
+	 * The element `head` is used to reference where the element should be
+	 * inserted.  Depending on the structure of this `head` node, the `element`
+	 * will either replace/overwrite `head` or be appending immediately after
+	 * `head`.
+	 *
+	 * @param {HTMLElement} head The "head" element of the "head and tail"
+	 *                           nodes resulting from splitting a DOM element.
+	 * @param {HTMLElement} element The element to be inserted between the head
+	 *                              and tail split parts.
+	 */
+	function insertAfterSplit(head, element) {
+		if (head.nodeType !== Node.TEXT_NODE && isPhantomNode(head)) {
+			jQuery(head).replaceWith(element);
+		} else {
+			jQuery(head).after(element);
+		}
+	}
+
+	/**
 	 * @namespace GENTICS.Utils
 	 * @class Dom provides methods to get information about the DOM and to manipulate it
 	 * @singleton
 	 */
 	var Dom = Class.extend({
+		getIndexInParent: getIndexInParent,
 		/**
 		 * Regex to find word characters.
 		 */
@@ -326,12 +506,19 @@ define(['jquery', 'util/class', 'aloha/ecma5shims'], function (jQuery, Class, $_
 						// text node
 						secondPart = document.createTextNode(element.data.substring(splitPosition, element.data.length));
 						element.data = element.data.substring(0, splitPosition);
+						if (this.isEmpty(secondPart) && jQuery('br', newDom).length === 0) {
+							secondPart = jQuery('<br/>').addClass('aloha-end-br');
+						}
 					} else {
 						// other nodes
 						jqelement = jQuery(element);
 						children = jqelement.contents();
 						newElement = jqelement.clone(false).empty();
 						secondPart = newElement.append(children.slice(splitPosition, children.length)).get(0);
+						jQuery(secondPart).addClass('aloha-editing-p');
+						if (secondPart.childNodes.length === 1 && secondPart.childNodes.item(0).nodeName.toLowerCase() === 'br') {
+							jQuery(secondPart.childNodes.item(0)).addClass('aloha-end-br');
+						}
 					}
 
 					// update the range if necessary
@@ -685,33 +872,32 @@ define(['jquery', 'util/class', 'aloha/ecma5shims'], function (jQuery, Class, $_
 
 			// iterate through all sub nodes
 			startObject.contents().each(function () {
-				var index;
+				var nodeType;
 
 				// Try to read the nodeType property and return if we do not have permission
 				// ie.: frame document to an external URL
-				var nodeType;
 				try {
 					nodeType = this.nodeType;
-					index = that.getIndexInParent(this);
 				} catch (e) {
 					return;
 				}
 
 				// decide further actions by node type
 				switch (nodeType) {
-					// found a non-text node
+				// found a non-text node
 				case 1:
-					if (prevNode && prevNode.nodeName == this.nodeName) {
+					var thisNodeName = this.nodeName;
+					if (prevNode && prevNode.nodeName === thisNodeName) {
 						// found a successive node of same type
 
 						// now we check whether the selection starts or ends in the mother node after the current node
-						if (rangeObject.startContainer === startObject && startOffset > index) {
+						if (rangeObject.startContainer === startObject && startOffset > getIndexInParent(this)) {
 							// there will be one less object, so reduce the startOffset by one
 							rangeObject.startOffset -= 1;
 							// set the flag for range modification
 							modifiedRange = true;
 						}
-						if (rangeObject.endContainer === startObject && endOffset > index) {
+						if (rangeObject.endContainer === startObject && endOffset > getIndexInParent(this)) {
 							// there will be one less object, so reduce the endOffset by one
 							rangeObject.endOffset -= 1;
 							// set the flag for range modification
@@ -728,7 +914,6 @@ define(['jquery', 'util/class', 'aloha/ecma5shims'], function (jQuery, Class, $_
 						jQuery(this).remove();
 
 					} else {
-
 						// do the recursion step here
 						modifiedRange |= that.doCleanup(cleanup, rangeObject, this);
 
@@ -739,7 +924,7 @@ define(['jquery', 'util/class', 'aloha/ecma5shims'], function (jQuery, Class, $_
 								//							jQuery(this).remove();
 								removed = true;
 							}
-							if (jQuery.inArray(this.nodeName.toLowerCase(), that.mergeableTags) >= 0 && jQuery(this).text().length === 0 && this.childNodes.length === 0) {
+							if (jQuery.inArray(thisNodeName.toLowerCase(), that.mergeableTags) >= 0 && jQuery(this).text().length === 0 && this.childNodes.length === 0) {
 								//							jQuery(this).remove();
 								removed = true;
 							}
@@ -747,22 +932,20 @@ define(['jquery', 'util/class', 'aloha/ecma5shims'], function (jQuery, Class, $_
 
 						// when the current node was not removed, we eventually store it as previous (mergeable) tag
 						if (!removed) {
-							if (cleanup.mergeable
-									? cleanup.mergeable(this)
-									: jQuery.inArray(this.nodeName.toLowerCase(), that.mergeableTags) >= 0) {
+							if (cleanup.mergeable ? cleanup.mergeable(this) : jQuery.inArray(thisNodeName.toLowerCase(), that.mergeableTags) >= 0) {
 								prevNode = this;
 							} else {
 								prevNode = false;
 							}
 						} else {
 							// now we check whether the selection starts or ends in the mother node of this
-							if (rangeObject.startContainer === this.parentNode && startOffset > index) {
+							if (rangeObject.startContainer === this.parentNode && startOffset > getIndexInParent(this)) {
 								// there will be one less object, so reduce the startOffset by one
 								rangeObject.startOffset = rangeObject.startOffset - 1;
 								// set the flag for range modification
 								modifiedRange = true;
 							}
-							if (rangeObject.endContainer === this.parentNode && endOffset > index) {
+							if (rangeObject.endContainer === this.parentNode && endOffset > getIndexInParent(this)) {
 								// there will be one less object, so reduce the endOffset by one
 								rangeObject.endOffset = rangeObject.endOffset - 1;
 								// set the flag for range modification
@@ -776,13 +959,16 @@ define(['jquery', 'util/class', 'aloha/ecma5shims'], function (jQuery, Class, $_
 					}
 
 					break;
-					// found a text node
+				// found a text node
 				case 3:
 					// found a text node
 					if (prevNode && prevNode.nodeType === 3 && cleanup.merge) {
 						// the current text node will be merged into the last one, so
 						// check whether the selection starts or ends in the current
 						// text node
+						var prevNodeValue = prevNode.nodeValue,
+							prevNodeValueLength = prevNodeValue.length;
+
 						if (rangeObject.startContainer === this) {
 							// selection starts in the current text node
 
@@ -790,19 +976,19 @@ define(['jquery', 'util/class', 'aloha/ecma5shims'], function (jQuery, Class, $_
 							rangeObject.startContainer = prevNode;
 
 							// update the start offset
-							rangeObject.startOffset += prevNode.nodeValue.length;
+							rangeObject.startOffset += prevNodeValueLength;
 
 							// set the flag for range modification
 							modifiedRange = true;
 
-						} else if (rangeObject.startContainer === prevNode.parentNode && rangeObject.startOffset === that.getIndexInParent(prevNode) + 1) {
+						} else if (rangeObject.startContainer === prevNode.parentNode && rangeObject.startOffset === getIndexInParent(prevNode) + 1) {
 							// selection starts right between the previous and current text nodes (which will be merged)
 
 							// update the start container to the previous node
 							rangeObject.startContainer = prevNode;
 
 							// set the start offset
-							rangeObject.startOffset = prevNode.nodeValue.length;
+							rangeObject.startOffset = prevNodeValueLength;
 
 							// set the flag for range modification
 							modifiedRange = true;
@@ -815,19 +1001,19 @@ define(['jquery', 'util/class', 'aloha/ecma5shims'], function (jQuery, Class, $_
 							rangeObject.endContainer = prevNode;
 
 							// update the end offset
-							rangeObject.endOffset += prevNode.nodeValue.length;
+							rangeObject.endOffset += prevNodeValueLength;
 
 							// set the flag for range modification
 							modifiedRange = true;
 
-						} else if (rangeObject.endContainer === prevNode.parentNode && rangeObject.endOffset === that.getIndexInParent(prevNode) + 1) {
+						} else if (rangeObject.endContainer === prevNode.parentNode && rangeObject.endOffset === getIndexInParent(prevNode) + 1) {
 							// selection ends right between the previous and current text nodes (which will be merged)
 
 							// update the end container to the previous node
 							rangeObject.endContainer = prevNode;
 
 							// set the end offset
-							rangeObject.endOffset = prevNode.nodeValue.length;
+							rangeObject.endOffset = prevNodeValueLength;
 
 							// set the flag for range modification
 							modifiedRange = true;
@@ -836,7 +1022,7 @@ define(['jquery', 'util/class', 'aloha/ecma5shims'], function (jQuery, Class, $_
 						// now append the contents of the current text node into the previous
 						prevNode.data += this.data;
 
-						// remove empty text nodes	
+						// remove empty text nodes
 					} else if (!(this.nodeValue === '' && cleanup.removeempty)) {
 						prevNode = this;
 						// we are finish here don't delete this node
@@ -844,13 +1030,13 @@ define(['jquery', 'util/class', 'aloha/ecma5shims'], function (jQuery, Class, $_
 					}
 
 					// now we check whether the selection starts or ends in the mother node of this
-					if (rangeObject.startContainer === this.parentNode && rangeObject.startOffset > index) {
+					if (rangeObject.startContainer === this.parentNode && rangeObject.startOffset > getIndexInParent(this)) {
 						// there will be one less object, so reduce the startOffset by one
 						rangeObject.startOffset = rangeObject.startOffset - 1;
 						// set the flag for range modification
 						modifiedRange = true;
 					}
-					if (rangeObject.endContainer === this.parentNode && rangeObject.endOffset > index) {
+					if (rangeObject.endContainer === this.parentNode && rangeObject.endOffset > getIndexInParent(this)) {
 						// there will be one less object, so reduce the endOffset by one
 						rangeObject.endOffset = rangeObject.endOffset - 1;
 						// set the flag for range modification
@@ -862,10 +1048,13 @@ define(['jquery', 'util/class', 'aloha/ecma5shims'], function (jQuery, Class, $_
 
 					// if this is the last text node in a sequence, we remove any zero-width spaces in the text node,
 					// unless it is the only character
-					if (prevNode && (!prevNode.nextSibling || prevNode.nextSibling.nodeType !== 3)) {
+					var prevNodeNextSibling = prevNode.nextSibling;
+					if (prevNode && (!prevNodeNextSibling || prevNodeNextSibling.nodeType !== 3)) {
 						var pos;
-						for (pos = prevNode.data.length - 1; pos >= 0 && prevNode.data.length > 1; pos--) {
-							if (prevNode.data.charAt(pos) === '\u200b') {
+						var prevNodeData = prevNode.data;
+						var prevNodeDataLength = prevNodeData.length;
+						for (pos = prevNodeDataLength - 1; pos >= 0 && prevNodeDataLength > 1; pos--) {
+							if (prevNodeData.charAt(pos) === '\u200b') {
 								prevNode.deleteData(pos, 1);
 								if (rangeObject.startContainer === prevNode && rangeObject.startOffset > pos) {
 									rangeObject.startOffset--;
@@ -904,28 +1093,6 @@ define(['jquery', 'util/class', 'aloha/ecma5shims'], function (jQuery, Class, $_
 			}
 
 			return modifiedRange;
-		},
-
-		/**
-		 * Get the index of the given node within its parent node
-		 * @param {DOMObject} node node to check
-		 * @return {Integer} index in the parent node or false if no node given or node has no parent
-		 * @method
-		 */
-		getIndexInParent: function (node) {
-			if (!node) {
-				return false;
-			}
-
-			var index = 0,
-				check = node.previousSibling;
-
-			while (check) {
-				index++;
-				check = check.previousSibling;
-			}
-
-			return index;
 		},
 
 		/**
@@ -1166,8 +1333,21 @@ define(['jquery', 'util/class', 'aloha/ecma5shims'], function (jQuery, Class, $_
 					return true;
 				}
 				if (splitParts) {
-					// if the DOM could be split, we insert the new object in between the split parts
-					splitParts.eq(0).after(object);
+					// ASSERT(splitParts.length === 2)
+					var head = splitParts[0];
+					var tail = splitParts[1];
+					insertAfterSplit(head, object);
+					if (isPhantomNode(tail)) {
+						var afterTail = tail.nextSibling
+						             || (tail.parentNode && tail.parentNode.nextSibling);
+						if (findNodeForward(afterTail, isNotVisiblyEmpty)) {
+							// Because the tail element that is generated from
+							// the splitting is superfluous since there is
+							// already a visible element in which to place the
+							// selection.
+							jQuery(tail).remove();
+						}
+					}
 					return true;
 				}
 				// could not split, so could not insert
@@ -1189,7 +1369,7 @@ define(['jquery', 'util/class', 'aloha/ecma5shims'], function (jQuery, Class, $_
 		removeFromDOM: function (object, range, preserveContent) {
 			if (preserveContent) {
 				// check whether the range will need modification
-				var indexInParent = this.getIndexInParent(object),
+				var indexInParent = getIndexInParent(object),
 					numChildren = jQuery(object).contents().length,
 					parent = object.parentNode;
 
@@ -1273,7 +1453,7 @@ define(['jquery', 'util/class', 'aloha/ecma5shims'], function (jQuery, Class, $_
 					// if the domobj is the startcontainer, or the startcontainer is inside the domobj, we need to update the rangeObject
 					if (jQuery(rangeObject.startContainer).parents().andSelf().filter(rangeTree[i].domobj).length > 0) {
 						rangeObject.startContainer = rangeObject.endContainer = rangeTree[i].domobj.parentNode;
-						rangeObject.startOffset = rangeObject.endOffset = this.getIndexInParent(rangeTree[i].domobj);
+						rangeObject.startOffset = rangeObject.endOffset = getIndexInParent(rangeTree[i].domobj);
 					}
 
 					// remove the object from the DOM
@@ -1351,6 +1531,7 @@ define(['jquery', 'util/class', 'aloha/ecma5shims'], function (jQuery, Class, $_
 			    textNode;
 			while (!boundaryFound) {
 				// check the node type
+				var containerIndex = getIndexInParent(container);
 				if (container.nodeType === 3) {
 					// we are currently in a text node
 
@@ -1364,7 +1545,7 @@ define(['jquery', 'util/class', 'aloha/ecma5shims'], function (jQuery, Class, $_
 							boundaryFound = true;
 						} else {
 							// found no word boundary, so we set the position after the container
-							offset = this.getIndexInParent(container) + 1;
+							offset = containerIndex + 1;
 							container = container.parentNode;
 						}
 					} else {
@@ -1385,7 +1566,7 @@ define(['jquery', 'util/class', 'aloha/ecma5shims'], function (jQuery, Class, $_
 							boundaryFound = true;
 						} else {
 							// found no word boundary, so we set the position before the container
-							offset = this.getIndexInParent(container);
+							offset = containerIndex;
 							container = container.parentNode;
 						}
 					}
@@ -1411,7 +1592,7 @@ define(['jquery', 'util/class', 'aloha/ecma5shims'], function (jQuery, Class, $_
 								boundaryFound = true;
 							} else {
 								// element itself is no boundary element, so go to parent
-								offset = this.getIndexInParent(container) + 1;
+								offset = containerIndex + 1;
 								container = container.parentNode;
 							}
 						}
@@ -1434,7 +1615,7 @@ define(['jquery', 'util/class', 'aloha/ecma5shims'], function (jQuery, Class, $_
 								boundaryFound = true;
 							} else {
 								// element itself is no boundary element, so go to parent
-								offset = this.getIndexInParent(container);
+								offset = containerIndex;
 								container = container.parentNode;
 							}
 						}
@@ -1475,7 +1656,14 @@ define(['jquery', 'util/class', 'aloha/ecma5shims'], function (jQuery, Class, $_
 
 			// text nodes are not empty, if they contain non-whitespace characters
 			if (domObject.nodeType === 3) {
-				return domObject.data.search(/\S/) == -1;
+				if (domObject.data.search(/\S/) == -1) {
+					return true;
+				} else if (domObject.data.length === 1 // Fix FOR IE no width chars
+						&& domObject.data.charCodeAt(0) >= 0x2000) {
+					return true;
+				}
+
+				return false;
 			}
 
 			// all other nodes are not empty if they contain at least one child which is not empty
@@ -1497,7 +1685,7 @@ define(['jquery', 'util/class', 'aloha/ecma5shims'], function (jQuery, Class, $_
 		 */
 		setCursorAfter: function (domObject) {
 			var newRange = new GENTICS.Utils.RangeObject(),
-				index = this.getIndexInParent(domObject),
+				index = getIndexInParent(domObject),
 				targetNode,
 				offset;
 
@@ -1513,7 +1701,7 @@ define(['jquery', 'util/class', 'aloha/ecma5shims'], function (jQuery, Class, $_
 				offset = 0;
 			} else {
 				targetNode = domObject.parentNode;
-				offset = this.getIndexInParent(domObject) + 1;
+				offset = getIndexInParent(domObject) + 1;
 			}
 
 			newRange.startContainer = newRange.endContainer = targetNode;
@@ -1534,7 +1722,7 @@ define(['jquery', 'util/class', 'aloha/ecma5shims'], function (jQuery, Class, $_
 		selectDomNode: function (domObject) {
 			var newRange = new GENTICS.Utils.RangeObject();
 			newRange.startContainer = newRange.endContainer = domObject.parentNode;
-			newRange.startOffset = this.getIndexInParent(domObject);
+			newRange.startOffset = getIndexInParent(domObject);
 			newRange.endOffset = newRange.startOffset + 1;
 			newRange.select();
 		},
@@ -1607,7 +1795,7 @@ define(['jquery', 'util/class', 'aloha/ecma5shims'], function (jQuery, Class, $_
 		},
 
 		/**
-		 * 
+		 *
 		 * "Two nodes are in the same editing host if the editing host of the first is
 		 * non-null and the same as the editing host of the second."
 		 * @param node1 DOM object

@@ -37,7 +37,10 @@ define([
 	'aloha/observable',
 	'ui/scopes',
 	'util/class',
-	'PubSub'
+	'PubSub',
+	'block/block-utils',
+	'util/html',
+	'util/functions'
 ], function(
 	Aloha,
 	jQuery,
@@ -45,7 +48,10 @@ define([
 	Observable,
 	Scopes,
 	Class,
-	PubSub
+	PubSub,
+	BlockUtils,
+	Html,
+	Fn
 ){
 	'use strict';
 
@@ -148,7 +154,20 @@ define([
 			if (this.isDraggable()) {
 				// Remove default drag/drop behavior of the browser
 				$element.find('img').attr('draggable', 'false');
-				$element.find('a').attr('draggable', 'false');
+
+				try {
+					$element.find('a').attr('draggable', 'false');
+				} catch(e) {
+					// If we get in here, it is most likely an issue with IE 10 in documentmode 7
+					// and IE10 compatibility mode. It maybe happens in older versions too.
+					// Error: Member not found
+					// https://connect.microsoft.com/IE/feedback/details/774078
+					// http://bugs.jquery.com/ticket/12577
+					// Our fallback solution:
+					$element.find('a').each(function() {
+						this.setAttribute('draggable', 'false');
+					});
+				}
 			}
 
 			// set the attributes
@@ -179,6 +198,33 @@ define([
 			//		that.activate();
 			//	}
 			//});
+
+			// Only for inline element.
+			// It is not possible to insert text after or before a Block span
+			// when after or before the Block there is not elements
+			if (Html.isInlineFormattable($element[0])) {
+				if ($element.closest('.aloha-editable-active').length > 0) {
+					BlockUtils.pad(that.$element);
+				}
+
+				Aloha.bind('aloha-editable-activated', function ($event, data) {
+					if (data.editable) {
+						var $block = data.editable.obj.find('#' + that.id);
+						if ($block.length !== 0) {
+							BlockUtils.pad(that.$element);
+						}
+					}
+				});
+
+				Aloha.bind('aloha-editable-deactivated', function ($event, data) {
+					if (data.editable) {
+						var $block = data.editable.obj.find('#' + that.id);
+						if ($block.length !== 0) {
+							BlockUtils.unpad(that.$element);
+						}
+					}
+				});
+			}
 
 			this._initialized = true;
 		},
@@ -425,11 +471,12 @@ define([
 		 * @return Boolean
 		 */
 		isDraggable: function() {
-			if (this.$element[0].tagName.toLowerCase() === 'div' && this.$element.parents('.aloha-editable,.aloha-block,.aloha-block-collection').first().hasClass('aloha-block-collection')) {
+			if (this.$element[0].nodeName === 'DIV' &&
+				this.$element.parents('.aloha-editable,.aloha-block:not(.aloha-table-wrapper),.aloha-block-collection').first().hasClass('aloha-block-collection')) {
 				// Here, we are inside an aloha-block-collection, and thus also need to be draggable.
 				return true;
 			}
-			return this.$element.parents('.aloha-editable,.aloha-block').first().hasClass('aloha-editable');
+			return this.$element.parents('.aloha-block:not(.aloha-table-wrapper),.aloha-editable').first().hasClass('aloha-editable');
 		},
 
 		/**************************
@@ -584,12 +631,15 @@ define([
 			this._makeNestedBlockCollectionsSortable();
 
 			this.renderBlockHandlesIfNeeded();
-			if (this.isDraggable() && this.$element[0].tagName.toLowerCase() === 'span') {
-				this._setupDragDropForInlineElements();
-				this._disableUglyInternetExplorerDragHandles();
-			} else if (this.isDraggable() && this.$element[0].tagName.toLowerCase() === 'div') {
-				this._setupDragDropForBlockElements();
-				this._disableUglyInternetExplorerDragHandles();
+			if (this.isDraggable()) {
+				var nodeName = this.$element[0].nodeName;
+				if (nodeName === 'SPAN') {
+					this._setupDragDropForInlineElements();
+					this._disableUglyInternetExplorerDragHandles();
+				} else if (nodeName === 'DIV') {
+					this._setupDragDropForBlockElements();
+					this._disableUglyInternetExplorerDragHandles();
+				}
 			}
 			this._hideDragHandlesIfDragDropDisabled();
 			this._attachDropzoneHighlightEvents();
@@ -626,7 +676,7 @@ define([
 					// for nested ones.
 					BlockManager.createBlockLevelSortableForEditableOrBlockCollection($blockCollection);
 				}
-			})
+			});
 		},
 
 		/**
@@ -635,10 +685,11 @@ define([
 		 */
 		_disableUglyInternetExplorerDragHandles: function() {
 			if (jQuery.browser.msie) {
-				this.$element.get( 0 ).onresizestart = function ( e ) { return false; };
-				this.$element.get( 0 ).oncontrolselect = function ( e ) { return false; };
+				var $elem = this.$element.get(0);
+				$elem.onresizestart = Fn.returnFalse;
+				$elem.oncontrolselect = Fn.returnFalse;
 				// We do NOT abort the "ondragstart" event as it is required for drag/drop.
-				this.$element.get( 0 ).onmovestart = function ( e ) { return false; };
+				$elem.onmovestart = Fn.returnFalse;
 				// We do NOT abort the "onselectstart" event because this would disable selection in nested editables
 			}
 		},
@@ -651,7 +702,7 @@ define([
 			if ( !this._dd_isDragdropEnabled() ){
 				this.$element.find('.aloha-block-draghandle').each(function () {
 					var $draghandle = jQuery(this);
-					if (!isDragdropEnabledForElement($draghandle)) {
+					if (!BlockUtils.isDragdropEnabledForElement($draghandle)) {
 						$draghandle.removeClass('aloha-block-draghandle');
 					}
 				});
@@ -678,7 +729,7 @@ define([
 
                 // Remove the dropzones as soon as the mouse is released,
                 // irrespective of where the drop took place.
-                jQuery( document ).one( "mouseup.aloha-block-dropzone", function(e) {
+                jQuery( document ).one( "mouseup.aloha-block-dropzone", function() {
                     var dropzones = that.$element.parents( ".aloha-editable" ).first().data( "block-dropzones" ) || [];
                     jQuery.each( dropzones, function(i, editable_selector) {
                         jQuery( editable_selector ).removeClass( "aloha-block-dropzone" );      
@@ -1057,7 +1108,7 @@ define([
          * for the editable, which this block belongs to.
          */
         _dd_isDragdropEnabled: function () {
-			return isDragdropEnabledForElement(this.$element.parent());
+			return BlockUtils.isDragdropEnabledForElement(this.$element.parent());
         },
 
 		/**************************
@@ -1245,28 +1296,9 @@ define([
 		init: function() {},
 		activate: function () {},
 		deactivate: function () {},
-		renderBlockHandlesIfNeeded: function () {}
+		renderBlockHandlesIfNeeded: function () {},
+		_preventSelectionChangedEventHandler: function () {}
 	});
-
-	/**
-	 * Tests whether the given element is contained in an editable for
-	 * which the block dragdrop feature is enabled.
-	 * 
-	 * @param {!jQuery} $element
-	 *        The element that may or may not be contained in an editable.
-	 * @return {boolean}
-	 *        True, unless the given $element is contained in an
-	 *        editable for which the dragdrop feature has been disabled.
-	 */
-	function isDragdropEnabledForElement($element) {
-		var editable = $element.closest(".aloha-editable");
-		if (editable.length) {
-			return !!editable.data("block-dragdrop");
-		} else {
-			// no editable specified, let's make drag & drop enabled by default.    
-			return true;
-		}
-	}
 
 	return {
 		AbstractBlock: AbstractBlock,

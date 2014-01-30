@@ -1,91 +1,43 @@
-define(['jquery'], function ($) {
-
+define([
+	'jquery',
+	'aloha/copypaste',
+	'util/browser',
+	'aloha/console'
+], function (
+	$,
+	CopyPaste,
+	Browser,
+	Console
+) {
 	'use strict';
 
-	/**
-	 * Checks whether the markup describes a paragraph that is propped by
-	 * a <br> tag but is otherwise empty.
-	 * 
-	 * Will return true for:
-	 *
-	 * <p id="foo"><br class="bar" /></p>
-	 *
-	 * as well as:
-	 *
-	 * <p><br></p>
-	 *
-	 * @param {string} html Markup
-	 * @return {boolean} True if html describes a propped paragraph.
-	 */
-	function isProppedParagraph(html) {
-		var trimmed = $.trim(html);
-		if (!trimmed) {
-			return false;
+	function getAnchorCell(cells) {
+		if (0 === cells.length) {
+			return null;
 		}
-		var node = $('<div>' + trimmed + '</div>')[0];
-		var containsSingleP = node.firstChild === node.lastChild
-		                   && 'p' === node.firstChild.nodeName.toLowerCase();
-		if (containsSingleP) {
-			var kids = node.firstChild.children;
-			return (kids && 1 === kids.length &&
-					'br' === kids[0].nodeName.toLowerCase());
+
+		var i;
+		var editable;
+		var range = CopyPaste.getRange();
+
+		if (range) {
+			editable = $(
+				range.commonAncestorContainer
+			).closest('.aloha-table-cell-editable')[0];
 		}
-		return false;
+
+		if (editable) {
+			for (i = 0; i < cells.length; i++) {
+				if ($(cells[i]).find(editable).length) {
+					return cells[i];
+				}
+			}
+		}
+
+		return cells[0];
 	}
 
 	var Utils = {
-
-		/**
-		 * Transforms all tables in the given content to make them ready to for
-		 * use with Aloha's table handling.
-		 *
-		 * Cleans tables of their unwanted attributes.
-		 * Normalizes table cells.
-		 *
-		 * @param {jQuery.<HTMLElement>} $content
-		 */
-		'prepareContent': function ($content) {
-			// Because Aloha does not provide a way for the editor to
-			// manipulate borders, cellspacing, cellpadding in tables.
-			// @todo what about width, height?
-			$content.find('table').removeAttr('cellpadding')
-			                      .removeAttr('cellspacing')
-			                      .removeAttr('border')
-			                      .removeAttr('border-top')
-			                      .removeAttr('border-bottom')
-			                      .removeAttr('border-left')
-			                      .removeAttr('border-right');
-
-			$content.find('td').each(function () {
-				var td = this;
-
-				// Because cells with a single empty <p> are rendered to appear
-				// like empty cells, it simplifies the handeling of cells to
-				// normalize these table cells to contain actual white space
-				// instead.
-				if (isProppedParagraph(td.innerHTML)) {
-					td.innerHTML = '&nbsp;';
-				}
-
-				// Because a single <p> wrapping the contents of a <td> is
-				// initially superfluous and should be stripped out.
-				var $p = $('>p', td);
-				if (1 === $p.length) {
-					$p.contents().unwrap();
-				}
-			});
-
-			// Because Aloha does not provide a means for editors to manipulate
-			// these properties.
-			$content.find('td,tr').removeAttr('width')
-			                      .removeAttr('height')
-			                      .removeAttr('valign');
-
-			// Because Aloha table handling simply does not regard colgroups.
-			// @TODO Use sanitize.js?
-			$content.find('colgroup').remove();
-		},
-
 		/**
 		 * Translates the DOM-Element column offset of a table-cell to the
 		 * column offset of a grid-cell, which is the column index adjusted
@@ -306,10 +258,12 @@ define(['jquery'], function ($) {
 		 *        If the callback returns a value identical to false,
 		 *        the walk will be aborted early.
 		 */
-		'walkGrid': function (grid, callback) {
-			for ( var i = 0; i < grid.length; i++ ) {
-				for ( var j = 0; j < grid[i].length; j++ ) {
-					if ( false === callback( grid[ i ][ j ], j, i ) ) {
+		'walkGrid': function(grid, callback) {
+			var	row;
+			for (var i = 0, gridLength = grid.length; i < gridLength; i++ ) {
+				row = grid[i];
+				for (var j = 0, rowLength = row.length; j < rowLength; j++ ) {
+					if ( false === callback( row[ j ], j, i ) ) {
 						return;
 					}
 				}
@@ -439,14 +393,14 @@ define(['jquery'], function ($) {
 		/**
 		 * resizes the width of the given cell
 		 *
-		 * @param cell
+		 * @param {DOM element} cell
 		 *        the DOM node for a table cell (td/th)
-		 * @param
+		 * @param {number | string} width
 		 *        an integer value indicating the desired width
 		 */
 
 		'resizeCellWidth': function(cell, width) {
-			$( cell ).css( 'width', width );
+			$( cell ).css('width', width);
 			$( cell ).find('.aloha-table-cell-editable').eq(0).css({
 				'width': width,
 				'word-wrap': 'break-word'
@@ -570,6 +524,22 @@ define(['jquery'], function ($) {
 		 */
 		'getCellPadding': function(cell) {
 			return ( cell.innerWidth() - cell.width() );
+		},
+
+		selectAnchorContents: function(selection) {
+			var anchor = getAnchorCell(selection);
+			if (anchor) {
+				var element = $('>.aloha-table-cell-editable', anchor)[0];
+				if (Browser.ie7 || Browser.ie8) {
+					try {
+						CopyPaste.selectAllOf(element);
+					} catch (e) {
+						Console.warn('Table Plugin', e.message);
+					}
+				} else {
+					CopyPaste.selectAllOf(element);
+				}
+			}
 		}
 
 	};

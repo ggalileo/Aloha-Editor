@@ -1,7 +1,7 @@
 /* link-plugin.js is part of Aloha Editor project http://aloha-editor.org
  *
  * Aloha Editor is a WYSIWYG HTML5 inline editing library and editor. 
- * Copyright (c) 2010-2012 Gentics Software GmbH, Vienna, Austria.
+ * Copyright (c) 2010-2013 Gentics Software GmbH, Vienna, Austria.
  * Contributors http://aloha-editor.org/contribution.php 
  * 
  * Aloha Editor is free software; you can redistribute it and/or
@@ -45,7 +45,9 @@ define( [
 	'ui/toggleButton',
 	'i18n!link/nls/i18n',
 	'i18n!aloha/nls/i18n',
-	'aloha/console'
+	'aloha/console',
+	'PubSub',
+	'util/keys'
 ], function (
 	Aloha,
 	Plugin,
@@ -59,7 +61,9 @@ define( [
 	ToggleButton,
 	i18n,
 	i18nCore,
-	console
+	console,
+	PubSub,
+	Keys
 ) {
 	'use strict';
 	
@@ -73,8 +77,8 @@ define( [
 	 * markup.
 	 *
 	 * Successive anchor elements are generally not merged, but an exception
-	 * needs to be made in the process of creating links: fragments of new links
-	 * are coalesced whenever possible.
+	 * needs to be made in the process of creating links: adjacent fragments of
+	 * new links are coalesced whenever possible.
 	 *
 	 * @type {object}
 	 */
@@ -88,12 +92,71 @@ define( [
 	
 	Ephemera.classes('aloha-link-pointer', 'aloha-link-text');
 
+	function setupMousePointerFix() {
+		jQuery(document)
+			.bind('keydown.aloha-link.pointer-fix', function (e) {
+				// metaKey for OSX, 17 for PC (we can't check
+				// e.ctrlKey because it's only set on keyup or
+				// keypress, not on keydown).
+				if (e.metaKey || Keys.getToken(e.keyCode) === 'control') {
+					jQuery('body').addClass('aloha-link-pointer');
+				}
+			})
+			.bind('keyup.aloha-link.pointer-fix', function (e) {
+				if (e.metaKey || Keys.getToken(e.keyCode) === 'control') {
+					jQuery('body').removeClass('aloha-link-pointer');
+				}
+			});
+	}
+
+	function teardownMousePointerFix() {
+		jQuery(document).unbind('.aloha-link.pointer-fix');
+	}
+
+	function setupMetaClickLink(editable) {
+		editable.obj.delegate('a', 'click.aloha-link.meta-click-link', function (e) {
+			// Use metaKey for OSX and ctrlKey for PC
+			if (e.metaKey || e.ctrlKey) {
+				// blur current editable. user is waiting for the link to load
+				Aloha.activeEditable.blur();
+				// hack to guarantee a browser history entry
+				window.setTimeout(function () {
+					location.href = e.target;
+				}, 0);
+				e.stopPropagation();
+				return false;
+			}
+		});
+	}
+
+	function teardownMetaClickLink(editable) {
+		editable.obj.unbind('.aloha-link.meta-click-link');
+	}
+
 	return Plugin.create('link', {
 		/**
 		 * Default configuration allows links everywhere
 		 */
 		config: [ 'a' ],
-		
+
+		/**
+		 * The value that will automatically be set to an anchor tag's title
+		 * attribute if its href field matches the titleregex, and the editor
+		 * has not manually defined the title attribute.
+		 *
+		 * @type {string}
+		 */
+		title: null,
+
+		/**
+		 * Regular Expression string which the field's href value will be tested
+		 * against in order to determine whether or not to set the configured
+		 * title attribute value.
+		 *
+		 * @type {string}
+		 */
+		titleregex: null,
+
 		/**
 		 * all links that match the targetregex will get set the target
 		 * e.g. ^(?!.*aloha-editor.com).* matches all href except aloha-editor.com
@@ -110,7 +173,7 @@ define( [
 		 * all links that match the cssclassregex will get set the css class
 		 * e.g. ^(?!.*aloha-editor.com).* matches all href except aloha-editor.com
 		 */
-		cssclassregex: '',
+		cssclassregex: null,
 		
 		/**
 		  * this target is set when either cssclassregex matches or not set
@@ -155,8 +218,14 @@ define( [
 		 * Initialize the plugin
 		 */
 		init: function () {
-			var that = this;
-			
+			var plugin = this;
+
+			if ('undefined' !== typeof this.settings.title) {
+				this.title = this.settings.title;
+			}
+			if ('undefined' !== typeof this.settings.titleregex) {
+				this.titleregex = this.settings.titleregex;
+			}
 			if ( typeof this.settings.targetregex != 'undefined' ) {
 				this.targetregex = this.settings.targetregex;
 			}
@@ -185,9 +254,12 @@ define( [
 			this.createButtons();
 			this.subscribeEvents();
 			this.bindInteractions();
-			
+
 			Aloha.bind('aloha-plugins-loaded', function () {
-				that.initSidebar(Aloha.Sidebar.right);
+				plugin.initSidebar(Aloha.Sidebar.right);
+				PubSub.pub('aloha.link.ready', {
+					plugin: plugin
+				})
 			});
 		},
 
@@ -290,6 +362,8 @@ define( [
 			var that = this,
 			    isEnabled = {};
 
+			var editablesCreated = 0;
+
 			// add the event handler for creation of editables
 			Aloha.bind('aloha-editable-created', function (event, editable) {
 				var config = that.getEditableConfig(editable.obj),
@@ -302,7 +376,7 @@ define( [
 				}
 
 				// enable hotkey for inserting links
-				editable.obj.bind('keydown', that.hotKey.insertLink, function() {
+				editable.obj.bind('keydown.aloha-link', that.hotKey.insertLink, function() {
 					if ( that.findLinkMarkup() ) {
 						// open the tab containing the href
 						that.hrefField.foreground();
@@ -316,9 +390,20 @@ define( [
 				editable.obj.find('a').each(function() {
 					that.addLinkEventHandlers(this);
 				});
+
+				if (0 === editablesCreated++) {
+					setupMousePointerFix();
+				}
 			});
 
-			Aloha.bind('aloha-editable-activated', function() {
+			Aloha.bind('aloha-editable-destroyed', function (event, editable) {
+				editable.obj.unbind('.aloha-link');
+				if (0 === --editablesCreated) {
+					teardownMousePointerFix();
+				}
+			});
+
+			Aloha.bind('aloha-editable-activated', function(event, props) {
 				if (isEnabled[Aloha.activeEditable.getId()]) {
 					that._formatLinkButton.show();
 					that._insertLinkButton.show();
@@ -326,6 +411,7 @@ define( [
 					that._formatLinkButton.hide();
 					that._insertLinkButton.hide();
 				}
+				setupMetaClickLink(props.editable);
 			});
 
 			var insideLinkScope = false;
@@ -349,7 +435,7 @@ define( [
 			// outside the editable and thereby deactivates the
 			// editable, the link scope will remain active.
 			var linkPlugin = this;
-			Aloha.bind('aloha-editable-deactivated', function () {
+			Aloha.bind('aloha-editable-deactivated', function (event, props) {
 				if (insideLinkScope) {
 					// Leave the link scope lazily to avoid flickering
 					// when switching between anchor element editables.
@@ -360,6 +446,7 @@ define( [
 					}, 100);
 					insideLinkScope = false;
 				}
+				teardownMetaClickLink(props.editable);
 			});
 		},
 
@@ -404,7 +491,7 @@ define( [
 				Scopes.leaveScope(this.name, 'link', true);
 			}
 		},
-		
+
 		/**
 		 * Add event handlers to the given link object
 		 * @param link object
@@ -436,7 +523,7 @@ define( [
 						location.href = e.target;
 					}, 0 );
 					e.stopPropagation();
-					
+
 					return false;
 				}
 			} );
@@ -466,14 +553,16 @@ define( [
 				}
 			});
 			
-			this.hrefField = AttributeField( {
+			this.hrefField = AttributeField({
 				name: 'editLink',
 				width: 320,
 				valueField: 'url',
 				cls: 'aloha-link-href-field',
-				scope: 'Aloha.continuoustext'
-			} );
-			this.hrefField.setTemplate( '<span><b>{name}</b><br/>{url}</span>' );
+				scope: 'Aloha.continuoustext',
+				noTargetHighlight: false,
+				targetHighlightClass: 'aloha-focus'
+			});
+			this.hrefField.setTemplate('<span><b>{name}</b><br/>{url}</span>');
 			this.hrefField.setObjectTypeFilter( this.objectTypeFilter );
 
 			this._removeLinkButton = Ui.adopt("removeLink", Button, {
@@ -495,9 +584,7 @@ define( [
 
 			// update link object when src changes
 			this.hrefField.addListener( 'keyup', function ( event ) {
-				// Handle ESC key press: We do a rough check to see if the user
-				// has entered a link or searched for something
-				if ( event.keyCode == 27 ) {
+				if (Keys.getToken(event.keyCode) === 'escape') {
 					var curval = that.hrefField.getValue();
 					if ( curval[ 0 ] == '/' || // local link
 						 curval[ 0 ] == '#' || // inner document link
@@ -522,8 +609,8 @@ define( [
 				
 				that.hrefChange();
 				
-				// Handle the enter key. Terminate the link scope and show the final link.
-				if ( event.keyCode == 13 ) {
+				// Terminate the link scope and show the final link.
+				if (Keys.getToken(event.keyCode) === 'enter') {
 					// Update the selection and place the cursor at the end of the link.
 					var	range = Aloha.Selection.getRangeObject();
 					
@@ -567,8 +654,8 @@ define( [
 						oldValue = newValue;
 					}
 				}
-			} );
-			
+			});
+
 			jQuery( document )
 				.keydown( function ( e ) {
 					Aloha.Log.debug( that, 'Meta key down.' );
@@ -685,6 +772,7 @@ define( [
 
 			range.select();
 
+
 			// focus has to become before prefilling the attribute, otherwise
 			// Chrome and Firefox will not focus the element correctly.
 			this.hrefField.focus();
@@ -695,6 +783,12 @@ define( [
 				jQuery( this.hrefField.getInputElem() ).attr( 'value', that.hrefValue ).select();
 			}
 			
+			// because the Aloha Selection is deprecated I need to convert it to a ragne
+			var apiRange = Aloha.createRange();
+			apiRange.setStart(range.startContainer, range.startOffset);
+			apiRange.setEnd(range.endContainer, range.endOffset);
+
+			PubSub.pub('aloha.link.insert', {range: apiRange});
 			this.hrefChange();
 		},
 
@@ -703,7 +797,7 @@ define( [
 		 */
 		removeLink: function ( terminateLinkScope ) {
 			var	range = Aloha.Selection.getRangeObject(),
-			    foundMarkup = this.findLinkMarkup();
+				foundMarkup = this.findLinkMarkup();
 			
 			// clear the current item from the href field
 			this.hrefField.setItem(null);
@@ -725,10 +819,37 @@ define( [
 		},
 
 		/**
+		 * Automatically sets (or unsets) the title attribute value of the given
+		 * AttributeField's target anchor element based on the link's href
+		 * value.
+		 *
+		 * @param {AttributeField} field The AttributeField that is to be used.
+		 * @param {string} value The value to which the title attribute is to be
+		 *                       set to.
+		 * @param {string} regex A string representing a regular expression
+		 *                       against which to test the href value of the
+		 *                       AttributeField `field`, to predicate whether
+		 *                       the title field should be update or not.
+		 */
+		automaticallySetTitle: function (field, value, regex) {
+			var currentValue = jQuery(field.getTargetObject()).attr('title');
+			var canOverwriteTitle = !currentValue || value === currentValue;
+			if (value && canOverwriteTitle) {
+				field.setAttribute('title', value, regex, field.getValue());
+			}
+		},
+
+		/**
 		 * Updates the link object depending on the src field
 		 */
 		hrefChange: function () {
 			var that = this;
+
+			this.automaticallySetTitle(
+				this.hrefField,
+				this.title,
+				this.titleregex
+			);
 
 			// For now hard coded attribute handling with regex.
 			// Avoid creating the target attribute, if it's unnecessary, so
@@ -742,18 +863,29 @@ define( [
 				);
 			}
 			
-			this.hrefField.setAttribute(
-				'class',
-				this.cssclass,
-				this.cssclassregex,
-				this.hrefField.getValue()
-			);
+			if (null != this.cssclassregex) {
+				this.hrefField.setAttribute(
+					'class',
+					this.cssclass,
+					this.cssclassregex,
+					this.hrefField.getValue()
+				);
+			}
+
+			var href = that.hrefField.getValue();
+			var element = that.hrefField.getTargetObject();
 			
-			Aloha.trigger( 'aloha-link-href-change', {
-				 obj: that.hrefField.getTargetObject(),
-				 href: that.hrefField.getValue(),
+			Aloha.trigger('aloha-link-href-change', {
+				 href: href,
+				 obj: element,
 				 item: that.hrefField.getItem()
-			} );
+			});
+
+			PubSub.pub('aloha.link.changed', {
+				href: href,
+				element: element,
+				input: that.hrefField.getInputElem()
+			});
 			
 			if ( typeof this.onHrefChange == 'function' ) {
 				this.onHrefChange.call(
@@ -766,6 +898,28 @@ define( [
 		}
 	});
 
+	/**
+	 * Add additional target objects, in case the selection includes
+	 * several links tag
+	 *
+	 * @param {RangeObject} rangeObject Selection Range
+	 * @param {LinkPlugin} that Link Plugin object
+	 */
+	function addAdditionalTargetObject(rangeObject, field) {
+		var links = rangeObject.findAllMarkupByTagName('A', rangeObject);
+		for (var i = 0, len = links.length; i < len; i++) {
+			field.addAdditionalTargetObject(links[i]);
+		}
+	}
+
+	/**
+	 * Selection change handler.
+	 *
+	 * @param {LinkPlugin} that This Link Plugin object
+	 * @param {RangeObject} rangeObject Selection Range
+	 * @returns {boolean} True if the link Scope was activated,
+	 *                    False otherwise
+	 */
 	function selectionChangeHandler(that, rangeObject) {
 		var foundMarkup,
 		    enteredLinkScope = false;
@@ -773,18 +927,18 @@ define( [
 		// Check if we need to ignore this selection changed event for
 		// now and check whether the selection was placed within a
 		// editable area.
-		if (   !that.ignoreNextSelectionChangedEvent
-			&& Aloha.Selection.isSelectionEditable()
-			&& Aloha.activeEditable != null ) {
+		if (!that.ignoreNextSelectionChangedEvent &&
+			Aloha.Selection.isSelectionEditable() &&
+			Aloha.activeEditable != null ) {
 			
 			foundMarkup = that.findLinkMarkup(rangeObject);
-			
+
 			if (foundMarkup) {
 				that.toggleLinkScope(true);
 
 				// now we are ready to set the target object
 				that.hrefField.setTargetObject(foundMarkup, 'href');
-
+				addAdditionalTargetObject(rangeObject, that.hrefField);
 				// if the selection-changed event was raised by the first click interaction on this page
 				// the hrefField component might not be initialized. When the user switches to the link
 				// tab to edit the link the field would be empty. We check for that situation and add a
@@ -805,6 +959,12 @@ define( [
 				}
 				Aloha.trigger('aloha-link-selected');
 				enteredLinkScope = true;
+
+				PubSub.pub('aloha.link.selected', {
+					input: that.hrefField.getInputElem(),
+					href: that.hrefField.getValue(),
+					element: that.hrefField.getTargetObject()
+				});
 			} else {
 				that.toggleLinkScope(false);
 				that.hrefField.setTargetObject(null);
