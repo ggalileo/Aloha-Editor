@@ -296,7 +296,7 @@ define([
 		 * It should be set by us and updated for the particular branch
 		 * @property
 		 */
-		version: 'v22.7-g',
+		version: 'v24.12-a',
 
 		/**
 		 * Array of editables that are managed by Aloha
